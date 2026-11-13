@@ -1,0 +1,284 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Database,
+  CloudUpload,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Play,
+  RotateCw,
+  HardDrive,
+  ExternalLink,
+  ShieldAlert,
+} from 'lucide-react';
+import { api } from '../services/api';
+import { BackupHistoryItem, RemoteBackup, BackupSchedule } from '../types';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { animatePageEntrance } from '../animations/gsap';
+
+export function BackupsPage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { subscribe } = useWebSocket();
+
+  const [history, setHistory] = useState<BackupHistoryItem[]>([]);
+  const [remoteBackups, setRemoteBackups] = useState<RemoteBackup[]>([]);
+  const [schedule, setSchedule] = useState<BackupSchedule | null>(null);
+  const [scheduleTime, setScheduleTime] = useState('03:00');
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [scheduleTimezone, setScheduleTimezone] = useState('UTC');
+  const [isRunningBackup, setIsRunningBackup] = useState(false);
+  const [backupStage, setBackupStage] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  const [successMsg, setSuccessMsg] = useState<string>('');
+
+  const loadData = async () => {
+    try {
+      const [hist, rem, sched] = await Promise.all([
+        api.getBackupHistory(),
+        api.getRemoteBackups(),
+        api.getScheduler(),
+      ]);
+      setHistory(hist);
+      setRemoteBackups(rem);
+      if (sched) {
+        setSchedule(sched);
+        setScheduleTime(sched.backup_time || '03:00');
+        setScheduleEnabled(Boolean(sched.enabled));
+        setScheduleTimezone(sched.timezone || 'UTC');
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    animatePageEntrance(containerRef.current);
+    loadData();
+
+    const unsub = subscribe('BACKUP_PROGRESS', (payload: any) => {
+      if (payload.stage === 'INITIATING') {
+        setIsRunningBackup(true);
+        setBackupStage('Preparing backup and checking server state...');
+      } else if (payload.stage === 'STOPPING_SERVER') {
+        setBackupStage('Gracefully stopping Palworld server for data consistency...');
+      } else if (payload.stage === 'CREATING_ARCHIVE') {
+        setBackupStage('Creating compressed ZIP archive (world data & config)...');
+      } else if (payload.stage === 'UPLOADING_GOOGLE_DRIVE') {
+        setBackupStage('Streaming archive to Google Drive via rclone...');
+      } else if (payload.stage === 'VERIFYING_REMOTE') {
+        setBackupStage('Verifying remote archive existence and SHA256 integrity...');
+      } else if (payload.stage === 'COMPLETED') {
+        setIsRunningBackup(false);
+        setBackupStage('');
+        setSuccessMsg(`Backup ${payload.filename} completed and stored on Google Drive successfully!`);
+        loadData();
+      } else if (payload.stage === 'FAILED') {
+        setIsRunningBackup(false);
+        setBackupStage('');
+        setErrorMsg(`Backup failed: ${payload.error}. Guaranteed restart was executed.`);
+        loadData();
+      }
+    });
+
+    return unsub;
+  }, [subscribe]);
+
+  const handleRunManualBackup = async () => {
+    if (!window.confirm('Trigger full Palworld server backup now? The server will be stopped briefly to guarantee save integrity, then automatically restarted.')) return;
+
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsRunningBackup(true);
+    setBackupStage('Initiating backup engine...');
+
+    try {
+      await api.runBackup();
+      loadData();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Backup failed');
+    } finally {
+      setIsRunningBackup(false);
+    }
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const updated = await api.updateScheduler({
+        time: scheduleTime,
+        enabled: scheduleEnabled,
+        timezone: scheduleTimezone,
+      });
+      setSchedule(updated);
+      setSuccessMsg('Automated daily backup schedule updated.');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update schedule');
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
+  return (
+    <div ref={containerRef} className="space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-white">Full Server Backups & Google Drive</h1>
+          <p className="text-xs text-mutedText mt-0.5">Automated daily snapshots, rclone cloud storage, and fail-safe recovery</p>
+        </div>
+        <button
+          onClick={handleRunManualBackup}
+          disabled={isRunningBackup}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-accent text-black hover:bg-accent-hover transition-all disabled:opacity-50 shadow-sm"
+        >
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span>{isRunningBackup ? 'Executing Backup...' : 'Create Backup Now'}</span>
+        </button>
+      </div>
+
+      {/* Progress Alert Banner */}
+      {isRunningBackup && (
+        <div className="p-4 rounded-xl bg-card border border-accent/40 shadow-md">
+          <div className="flex items-center gap-3">
+            <RotateCw className="w-5 h-5 text-accent animate-spin flex-shrink-0" />
+            <div>
+              <div className="text-sm font-semibold text-white">Backup Engine Active</div>
+              <div className="text-xs text-accent mt-0.5 font-mono">{backupStage}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success / Error Banners */}
+      {successMsg && (
+        <div className="p-3.5 rounded-xl bg-success/10 border border-success/30 text-success text-xs flex items-center justify-between">
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg('')} className="hover:opacity-75">✕</button>
+        </div>
+      )}
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/30 text-danger text-xs flex items-center justify-between">
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg('')} className="hover:opacity-75">✕</button>
+        </div>
+      )}
+
+      {/* Scheduler Configuration Card */}
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-accent" />
+          Automated Daily Backup Schedule
+        </h2>
+
+        <form onSubmit={handleSaveSchedule} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-secondaryText mb-1.5">Daily Execution Time</label>
+            <input
+              type="time"
+              value={scheduleTime}
+              onChange={(e) => setScheduleTime(e.target.value)}
+              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-secondaryText mb-1.5">Timezone</label>
+            <select
+              value={scheduleTimezone}
+              onChange={(e) => setScheduleTimezone(e.target.value)}
+              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent font-mono"
+            >
+              <option value="UTC">UTC (Coordinated Universal Time)</option>
+              <option value="America/New_York">America/New_York (EST/EDT)</option>
+              <option value="Europe/London">Europe/London (GMT/BST)</option>
+              <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 h-10">
+            <input
+              type="checkbox"
+              id="sched-enabled"
+              checked={scheduleEnabled}
+              onChange={(e) => setScheduleEnabled(e.target.checked)}
+              className="w-4 h-4 rounded bg-secondary border-border text-accent focus:ring-accent"
+            />
+            <label htmlFor="sched-enabled" className="text-xs font-medium text-white cursor-pointer">
+              Enable Daily Automated Backup
+            </label>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              className="w-full bg-card hover:bg-border text-white border border-border text-xs font-medium py-2 rounded-lg transition-colors"
+            >
+              Update Schedule
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Google Drive Archives Table */}
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+            <CloudUpload className="w-4 h-4 text-accent" />
+            Google Drive Backup Archives (Retention: Unlimited)
+          </h2>
+          <span className="text-xs font-mono text-mutedText">
+            Total Archives: {remoteBackups.length}
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border/80 text-mutedText font-medium">
+                <th className="pb-3 pl-2">Archive Name</th>
+                <th className="pb-3">Size</th>
+                <th className="pb-3">Timestamp</th>
+                <th className="pb-3 pr-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40 font-mono">
+              {remoteBackups.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-mutedText font-sans">
+                    No remote backups found in Google Drive folder.
+                  </td>
+                </tr>
+              ) : (
+                remoteBackups.map((b) => (
+                  <tr key={b.Name} className="hover:bg-secondary/40 transition-colors">
+                    <td className="py-3 pl-2 font-semibold text-white flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-accent" />
+                      <span>{b.Name}</span>
+                    </td>
+                    <td className="py-3 text-secondaryText">{formatBytes(b.Size)}</td>
+                    <td className="py-3 text-mutedText">{new Date(b.ModTime).toLocaleString()}</td>
+                    <td className="py-3 pr-2 text-right font-sans">
+                      <a
+                        href="/restore"
+                        className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium"
+                      >
+                        Restore Options
+                      </a>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
