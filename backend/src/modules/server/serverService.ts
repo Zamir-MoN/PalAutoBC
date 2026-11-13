@@ -68,9 +68,16 @@ export class ServerService {
         // Read live process working directory from /proc/<pid>/cwd
         try {
           const { stdout: cwdOut } = await execAsync(`readlink -f /proc/${pid}/cwd`).catch(() => ({ stdout: '' }));
-          const liveCwd = cwdOut.trim();
+          let liveCwd = cwdOut.trim();
           if (liveCwd && fs.existsSync(liveCwd)) {
-            config.palworldDir = liveCwd;
+            if (liveCwd.includes('Pal/Binaries/Linux')) {
+              liveCwd = path.resolve(liveCwd, '../../..');
+            } else if (liveCwd.includes('Binaries/Linux')) {
+              liveCwd = path.resolve(liveCwd, '../..');
+            }
+            if (fs.existsSync(path.join(liveCwd, 'Pal')) || fs.existsSync(path.join(liveCwd, 'PalServer.sh'))) {
+              config.palworldDir = liveCwd;
+            }
           }
         } catch {}
 

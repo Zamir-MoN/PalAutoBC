@@ -13,14 +13,17 @@ function resolvePalworldDir(): string {
 
   // Common user locations on Ubuntu VPS (paladmin, steam, ubuntu)
   const candidates = [
+    '/home/paladmin/palworld',
     '/home/paladmin/Palserver',
     '/home/paladmin/Steam/steamapps/common/PalServer',
     '/home/paladmin',
+    '/home/steam/palworld',
     '/home/steam/Steam/steamapps/common/PalServer',
     '/home/steam/Palserver',
-    '/home/steam/palworld',
+    '/home/ubuntu/palworld',
     '/home/ubuntu/Palserver',
     '/home/ubuntu/Steam/steamapps/common/PalServer',
+    path.join(process.env.HOME || '', 'palworld'),
   ];
 
   for (const dir of candidates) {
