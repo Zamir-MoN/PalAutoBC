@@ -64,8 +64,9 @@ export class ConsoleService {
 
       this.lastReadPosition = stats.size;
 
-      stream.on('data', (chunk: string) => {
-        const lines = chunk.split('\n');
+      stream.on('data', (chunk: string | Buffer) => {
+        const text = chunk.toString();
+        const lines = text.split('\n');
         for (const line of lines) {
           if (!line.trim()) continue;
           let level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' = 'INFO';
