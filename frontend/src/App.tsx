@@ -12,6 +12,7 @@ import { PlayersPage } from './pages/PlayersPage';
 import { ConsolePage } from './pages/ConsolePage';
 import { FileManagerPage } from './pages/FileManagerPage';
 import { MonitoringPage } from './pages/MonitoringPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,35 +36,36 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<OverviewPage />} />
-              <Route path="backups" element={<BackupsPage />} />
-              <Route path="restore" element={<RestorePage />} />
-              <Route path="config" element={<ConfigPage />} />
-              <Route path="players" element={<PlayersPage />} />
-              <Route path="console" element={<ConsolePage />} />
-              <Route path="files" element={<FileManagerPage />} />
-              <Route path="monitoring" element={<MonitoringPage />} />
-            </Route>
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <DashboardLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<OverviewPage />} />
+                <Route path="backups" element={<BackupsPage />} />
+                <Route path="restore" element={<RestorePage />} />
+                <Route path="config" element={<ConfigPage />} />
+                <Route path="players" element={<PlayersPage />} />
+                <Route path="console" element={<ConsolePage />} />
+                <Route path="files" element={<FileManagerPage />} />
+                <Route path="monitoring" element={<MonitoringPage />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </QueryClientProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
-

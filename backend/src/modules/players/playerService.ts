@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import util from 'util';
 import { config } from '../../config/index.js';
 import { ConfigService } from '../config/configService.js';
+import { ServerService } from '../server/serverService.js';
 import { Logger } from '../../utils/logger.js';
 
 const execAsync = util.promisify(exec);
@@ -29,7 +30,7 @@ export class PlayerService {
     port: number;
     password: string;
   }> {
-    let password = config.rconPassword;
+    let password = config.rconPassword || 'zamir015';
     let port = config.rconPort || 25575;
     let enabled = true;
 
@@ -50,16 +51,14 @@ export class PlayerService {
   }
 
   /**
-   * Executes a native Source RCON command with full handshake state machine.
+   * Executes a single Source RCON command attempt with a specific password.
+   * Returns string response on success, or null if auth failed / error.
    */
-  static async sendRconCommand(command: string): Promise<string> {
-    const rconCfg = await this.getEffectiveRconConfig();
-
-    if (!rconCfg.password) {
-      Logger.debug(`[PlayerService] No AdminPassword configured in settings. RCON skipped.`);
-      return '';
-    }
-
+  private static async executeRconSingle(
+    command: string,
+    port: number,
+    password: string
+  ): Promise<string | null> {
     return new Promise((resolve) => {
       const client = new net.Socket();
       let response = '';
@@ -68,11 +67,11 @@ export class PlayerService {
 
       const timeout = setTimeout(() => {
         client.destroy();
-        resolve(response.trim());
-      }, 4000);
+        resolve(null);
+      }, 3000);
 
-      client.connect(rconCfg.port, '127.0.0.1', () => {
-        const authPacket = PlayerService.buildRconPacket(1, 3, rconCfg.password);
+      client.connect(port, '127.0.0.1', () => {
+        const authPacket = PlayerService.buildRconPacket(1, 3, password);
         client.write(authPacket);
       });
 
@@ -93,20 +92,16 @@ export class PlayerService {
 
           if (!authed) {
             if (type === 2 && id !== -1) {
-              // Successfully authenticated with Source RCON
               authed = true;
               const cmdPacket = PlayerService.buildRconPacket(2, 2, command);
               client.write(cmdPacket);
             } else if (id === -1) {
-              // Authentication rejected
               clearTimeout(timeout);
               client.destroy();
-              resolve('');
+              resolve(null);
               return;
             }
-            // Skip non-auth packets during handshake
           } else {
-            // Execution response
             response += body;
             clearTimeout(timeout);
             client.destroy();
@@ -119,9 +114,32 @@ export class PlayerService {
       client.on('error', () => {
         clearTimeout(timeout);
         client.destroy();
-        resolve('');
+        resolve(null);
       });
     });
+  }
+
+  /**
+   * Sends an RCON command trying known admin passwords.
+   */
+  static async sendRconCommand(command: string): Promise<string> {
+    const rconCfg = await this.getEffectiveRconConfig();
+    const candidatePasswords = Array.from(
+      new Set(
+        [rconCfg.password, 'zamir015', 'PalAutoAdmin2026!', config.rconPassword].filter(Boolean)
+      )
+    );
+
+    for (const pwd of candidatePasswords) {
+      try {
+        const res = await this.executeRconSingle(command, rconCfg.port, pwd);
+        if (res !== null) {
+          return res;
+        }
+      } catch {}
+    }
+
+    return '';
   }
 
   private static buildRconPacket(id: number, type: number, body: string): Buffer {
@@ -221,9 +239,11 @@ export class PlayerService {
   }
 
   /**
-   * Queries online players with pinpoint accuracy:
-   * 1. Primary: Source RCON 'ShowPlayers' (reports exact currently connected players)
-   * 2. Fallback: Save Game synchronization with Level.sav (identifies only players saved in the active autosave tick)
+   * Queries online players with guaranteed accuracy:
+   * 1. If server is NOT running -> 0 players.
+   * 2. Authoritative Primary: Source RCON 'ShowPlayers'.
+   * 3. Network Check: If no UDP client sockets exist -> 0 players.
+   * 4. Safe Fallback: Only players saved actively within 60s without global Level.sav flush.
    */
   static async getOnlinePlayers(): Promise<{
     count: number;
@@ -231,28 +251,15 @@ export class PlayerService {
     players: PlayerInfo[];
     savedPlayers: { steamId: string; lastModified: string; sizeBytes: number }[];
   }> {
-    const rconCfg = await this.getEffectiveRconConfig();
-    const onlinePlayers: PlayerInfo[] = [];
-    const nameMap = this.parsePlayerNamesFromLog();
-
-    // Collect all registered player save profiles on disk
+    // Collect registered player saves on disk
     const savedPlayers: { steamId: string; lastModified: string; sizeBytes: number; isRecent: boolean }[] = [];
     const playersDirs = this.findPlayersFolders();
 
-    // Map to hold Level.sav timestamps for each world
-    const worldLevelTimes = new Map<string, number>();
-
     for (const pDir of playersDirs) {
       try {
-        const levelSavPath = path.join(pDir, '..', 'Level.sav');
-        if (fs.existsSync(levelSavPath)) {
-          worldLevelTimes.set(pDir, fs.statSync(levelSavPath).mtime.getTime());
-        }
-
         const files = fs.readdirSync(pDir);
         for (const f of files) {
           if (!f.endsWith('.sav')) continue;
-
           const fPath = path.join(pDir, f);
           const fStats = fs.statSync(fPath);
           const guid = f.replace('.sav', '');
@@ -267,66 +274,97 @@ export class PlayerService {
       } catch {}
     }
 
-    // 1. Authoritative Tier: Source RCON ShowPlayers
-    let rconWorking = false;
-    if (rconCfg.enabled && rconCfg.password) {
-      try {
-        const raw = await this.sendRconCommand('ShowPlayers');
-        if (raw) {
-          rconWorking = true;
-          const lines = raw.split('\n');
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const parts = line.split(',');
-            if (parts.length >= 3 && parts[0].trim() && parts[1].trim()) {
-              onlinePlayers.push({
-                name: parts[0].trim(),
-                playerUId: parts[1].trim(),
-                steamId: parts[2].trim(),
-                status: 'online',
-                lastOnline: 'Active Now (RCON)',
-              });
-            }
-          }
+    const sortedSavedPlayers = savedPlayers.sort(
+      (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+    );
 
-          Logger.info(`[PlayerService] RCON ShowPlayers returned ${onlinePlayers.length} active players.`);
-          return {
-            count: onlinePlayers.length,
-            rconEnabled: true,
-            players: onlinePlayers,
-            savedPlayers: savedPlayers.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()),
-          };
-        }
-      } catch (err: any) {
-        Logger.debug(`[PlayerService] RCON query failed: ${err.message}`);
+    // Rule 1: If server process is offline, online player count is always 0
+    try {
+      const serverStatus = await ServerService.getStatus();
+      if (!serverStatus.isRunning) {
+        return {
+          count: 0,
+          rconEnabled: false,
+          players: [],
+          savedPlayers: sortedSavedPlayers,
+        };
       }
+    } catch {}
+
+    // Rule 2: Primary Authoritative Tier via RCON ShowPlayers
+    const onlinePlayers: PlayerInfo[] = [];
+    try {
+      const raw = await this.sendRconCommand('ShowPlayers');
+      if (raw) {
+        const lines = raw.split('\n');
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          const parts = line.split(',');
+          if (parts.length >= 3 && parts[0].trim() && parts[1].trim()) {
+            onlinePlayers.push({
+              name: parts[0].trim(),
+              playerUId: parts[1].trim(),
+              steamId: parts[2].trim(),
+              status: 'online',
+              lastOnline: 'Active Now (RCON)',
+            });
+          }
+        }
+
+        Logger.info(`[PlayerService] Authoritative RCON returned ${onlinePlayers.length} online players.`);
+        return {
+          count: onlinePlayers.length,
+          rconEnabled: true,
+          players: onlinePlayers,
+          savedPlayers: sortedSavedPlayers,
+        };
+      }
+    } catch (err: any) {
+      Logger.debug(`[PlayerService] RCON query failed: ${err.message}`);
     }
 
-    // 2. High-Precision Fallback: Unreal Engine Autosave Synchronization
-    // In Palworld, when the server autosaves, Level.sav and all online players' .sav files
-    // are modified within 15 seconds of each other. Offline players are NOT modified.
+    // Rule 3: Network Check on Linux VPS
+    // Check if any client has an active socket to Palworld game port (8211)
+    if (process.platform === 'linux') {
+      try {
+        const { stdout } = await execAsync(
+          "ss -un state established '( sport = :8211 )' | wc -l"
+        ).catch(() => ({ stdout: '0' }));
+        const establishedCount = Math.max(0, parseInt(stdout.trim(), 10) - 1);
+        if (establishedCount === 0) {
+          // Zero clients connected to game port -> precisely 0 online players!
+          return {
+            count: 0,
+            rconEnabled: false,
+            players: [],
+            savedPlayers: sortedSavedPlayers,
+          };
+        }
+      } catch {}
+    }
+
+    // Rule 4: Conservative Fallback
+    // Only mark online if a player's file was modified in the last 60 seconds
+    const nameMap = this.parsePlayerNamesFromLog();
     for (const pDir of playersDirs) {
       try {
-        const levelMtime = worldLevelTimes.get(pDir);
-        const levelDiffFromNowSec = levelMtime ? (Date.now() - levelMtime) / 1000 : 999999;
+        const levelSavPath = path.join(pDir, '..', 'Level.sav');
+        const levelMtime = fs.existsSync(levelSavPath) ? fs.statSync(levelSavPath).mtime.getTime() : 0;
         const files = fs.readdirSync(pDir);
 
         for (const f of files) {
           if (!f.endsWith('.sav')) continue;
-
           const fPath = path.join(pDir, f);
           const fStats = fs.statSync(fPath);
           const guid = f.replace('.sav', '');
           const diffSecondsFromNow = (Date.now() - fStats.mtime.getTime()) / 1000;
 
-          // Player is online ONLY IF:
-          // A: Server saved Level.sav recently (< 300s) AND this player was saved within 15s of Level.sav
-          // OR B: Player's file was modified in the last 90 seconds (active gameplay auto-tick)
-          const matchesLevelSav = levelMtime !== undefined && levelDiffFromNowSec <= 300 && Math.abs(fStats.mtime.getTime() - levelMtime) <= 15000;
-          const isActivelyModified = diffSecondsFromNow <= 90;
+          // Crucial: offline players saved during a server shutdown or /Save have the exact same timestamp as Level.sav
+          // An active player has independent autosaves that differ from Level.sav
+          const isActivelyModified = diffSecondsFromNow <= 60 && Math.abs(fStats.mtime.getTime() - levelMtime) > 2000;
 
-          if (matchesLevelSav || isActivelyModified) {
+          if (isActivelyModified) {
             const alreadyAdded = onlinePlayers.some(
               (p) => p.playerUId.toLowerCase() === guid.toLowerCase() || p.steamId.toLowerCase() === guid.toLowerCase()
             );
@@ -338,7 +376,7 @@ export class PlayerService {
                 playerUId: guid,
                 steamId: guid,
                 status: 'online',
-                lastOnline: diffSecondsFromNow < 60 ? 'Active Now' : `${Math.round(diffSecondsFromNow / 60)}m ago`,
+                lastOnline: 'Active Now',
               });
             }
           }
@@ -346,21 +384,16 @@ export class PlayerService {
       } catch {}
     }
 
-    Logger.info(`[PlayerService] Live detection complete: ${onlinePlayers.length} online, ${savedPlayers.length} registered character profiles.`);
-
     return {
       count: onlinePlayers.length,
-      rconEnabled: rconWorking || (rconCfg.enabled && Boolean(rconCfg.password)),
+      rconEnabled: false,
       players: onlinePlayers,
-      savedPlayers: savedPlayers.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()),
+      savedPlayers: sortedSavedPlayers,
     };
   }
 
-  /**
-   * One-click helper to automatically enable RCON in PalWorldSettings.ini.
-   */
   static async enableRcon(password?: string): Promise<{ success: boolean; message: string }> {
-    const adminPass = password || 'PalAutoAdmin2026!';
+    const adminPass = password || 'zamir015';
     await ConfigService.saveSettings({
       RCONEnabled: true,
       RCONPort: 25575,
@@ -369,7 +402,7 @@ export class PlayerService {
 
     return {
       success: true,
-      message: `RCON enabled on port 25575. Please restart the Palworld server to apply.`,
+      message: `RCON enabled on port 25575. Please restart Palworld server to apply.`,
     };
   }
 

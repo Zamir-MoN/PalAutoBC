@@ -51,7 +51,9 @@ export function ConfigPage() {
 
   useEffect(() => {
     if (!loading && containerRef.current) {
-      animatePageEntrance(containerRef.current);
+      try {
+        animatePageEntrance(containerRef.current);
+      } catch {}
     }
   }, [loading]);
 
