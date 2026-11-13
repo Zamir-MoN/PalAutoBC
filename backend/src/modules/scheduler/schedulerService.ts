@@ -30,17 +30,17 @@ export class SchedulerService {
         async () => {
           Logger.info('[SchedulerService] Triggering scheduled daily backup...');
           try {
-            db.prepare('UPDATE schedules SET status = "running", last_run = ? WHERE id = ?').run(
+            db.prepare("UPDATE schedules SET status = 'running', last_run = ? WHERE id = ?").run(
               new Date().toISOString(),
               schedule.id
             );
 
             await BackupService.runBackup('scheduled');
 
-            db.prepare('UPDATE schedules SET status = "idle" WHERE id = ?').run(schedule.id);
+            db.prepare("UPDATE schedules SET status = 'idle' WHERE id = ?").run(schedule.id);
           } catch (err: any) {
             Logger.error(`[SchedulerService] Scheduled backup error: ${err.message}`);
-            db.prepare('UPDATE schedules SET status = "error" WHERE id = ?').run(schedule.id);
+            db.prepare("UPDATE schedules SET status = 'error' WHERE id = ?").run(schedule.id);
           }
         },
         {
@@ -66,15 +66,14 @@ export class SchedulerService {
           cron_expression = ?,
           timezone = ?,
           updated_at = ?
-      WHERE id = 'schedule-daily'
-    `).run(enabled ? 1 : 0, time, cronExp, timezone, new Date().toISOString());
+      WHERE id = ?
+    `).run(enabled ? 1 : 0, time, cronExp, timezone, new Date().toISOString(), 'schedule-daily');
 
     this.reloadSchedules();
-    return db.prepare('SELECT * FROM schedules WHERE id = "schedule-daily"').get();
+    return this.getSchedule();
   }
 
   static getSchedule() {
-    return db.prepare('SELECT * FROM schedules WHERE id = "schedule-daily"').get();
+    return db.prepare('SELECT * FROM schedules WHERE id = ?').get('schedule-daily');
   }
 }
-
