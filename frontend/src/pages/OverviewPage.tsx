@@ -5,7 +5,7 @@ import {
   Cpu,
   HardDrive,
   Activity,
-  CloudCheck,
+  Cloud,
   Calendar,
   CheckCircle2,
   Clock,
@@ -159,7 +159,7 @@ export function OverviewPage() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-secondaryText">Google Drive Backup</span>
             <span className={`p-1.5 rounded-lg ${gdrive?.connected ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}`}>
-              <CloudCheck className="w-4 h-4" />
+              <Cloud className="w-4 h-4" />
             </span>
           </div>
           <div className="flex items-baseline gap-2">

@@ -13,7 +13,7 @@ import {
   Power,
   RefreshCw,
   Server,
-  CloudCheck,
+  Cloud,
   Menu,
   X,
   AlertCircle,
