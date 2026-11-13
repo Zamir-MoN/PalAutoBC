@@ -38,7 +38,12 @@ export function OverviewPage() {
     api.getMetrics().then(setMetrics).catch(() => {});
     api.getScheduler().then(setSchedule).catch(() => {});
     api.getGDriveStatus().then(setGDrive).catch(() => {});
-    api.getOnlinePlayers().then((res) => setPlayerCount(res.count)).catch(() => {});
+    const fetchPlayers = () => {
+      api.getOnlinePlayers().then((res) => setPlayerCount(res.count)).catch(() => {});
+    };
+    fetchPlayers();
+    const playerInterval = setInterval(fetchPlayers, 5000);
+
     api.getBackupHistory().then((history) => {
       const verified = history.find((b: BackupHistoryItem) => b.status === 'verified');
       if (verified) setLastBackup(verified);
@@ -49,6 +54,7 @@ export function OverviewPage() {
     const unsubMetrics = subscribe('METRICS_UPDATE', (data: SystemMetrics) => setMetrics(data));
 
     return () => {
+      clearInterval(playerInterval);
       unsubStatus();
       unsubMetrics();
     };

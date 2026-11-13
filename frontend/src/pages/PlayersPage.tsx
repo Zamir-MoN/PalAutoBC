@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, UserX, Ban, MessageSquare, Save, RefreshCw, Shield, AlertCircle } from 'lucide-react';
+import {
+  Users,
+  UserX,
+  Ban,
+  MessageSquare,
+  Save,
+  RefreshCw,
+  Shield,
+  AlertCircle,
+  CheckCircle2,
+  Zap,
+  HardDrive,
+} from 'lucide-react';
 import { api } from '../services/api';
 import { Player } from '../types';
 import { animatePageEntrance } from '../animations/gsap';
@@ -7,18 +19,25 @@ import { animatePageEntrance } from '../animations/gsap';
 export function PlayersPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [savedPlayers, setSavedPlayers] = useState<any[]>([]);
+  const [rconEnabled, setRconEnabled] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [enablingRcon, setEnablingRcon] = useState(false);
 
   const loadPlayers = async () => {
     try {
       setLoading(true);
       const res = await api.getOnlinePlayers();
       setPlayers(res.players || []);
+      setSavedPlayers(res.savedPlayers || []);
+      if (res.rconEnabled !== undefined) {
+        setRconEnabled(res.rconEnabled);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to query players via RCON');
+      setErrorMsg(err.message || 'Failed to query players');
     } finally {
       setLoading(false);
     }
@@ -28,6 +47,19 @@ export function PlayersPage() {
     animatePageEntrance(containerRef.current);
     loadPlayers();
   }, []);
+
+  const handleEnableRcon = async () => {
+    setEnablingRcon(true);
+    try {
+      const res = await api.enableRcon();
+      setActionMsg(res.message);
+      loadPlayers();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to enable RCON');
+    } finally {
+      setEnablingRcon(false);
+    }
+  };
 
   const handleKick = async (steamId: string, name: string) => {
     if (!window.confirm(`Kick player ${name} (${steamId}) from server?`)) return;
@@ -73,6 +105,14 @@ export function PlayersPage() {
     }
   };
 
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
   return (
     <div ref={containerRef} className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -103,6 +143,29 @@ export function PlayersPage() {
           </button>
         </div>
       </div>
+
+      {/* RCON Inactive Alert Banner with 1-Click Fix */}
+      {!rconEnabled && (
+        <div className="p-4 rounded-xl bg-card border border-warning/40 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-semibold text-white">RCON & Admin Password Not Configured</div>
+              <div className="text-xs text-mutedText mt-0.5">
+                Palworld requires RCON enabled to query player names, kick, and ban players. Click below to automatically enable RCON in PalWorldSettings.ini.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleEnableRcon}
+            disabled={enablingRcon}
+            className="px-3.5 py-1.5 bg-accent text-black font-semibold text-xs rounded-lg hover:bg-accent-hover transition-colors whitespace-nowrap flex items-center gap-1.5 self-start sm:self-auto"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>{enablingRcon ? 'Enabling...' : 'Enable RCON & Sync Now'}</span>
+          </button>
+        </div>
+      )}
 
       {actionMsg && (
         <div className="p-3.5 rounded-xl bg-success/10 border border-success/30 text-success text-xs flex items-center justify-between">
@@ -141,13 +204,16 @@ export function PlayersPage() {
         </form>
       </div>
 
-      {/* Players List Table */}
+      {/* Online Players Table */}
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
             Online Players ({players.length})
           </h2>
-          <span className="text-xs font-mono text-mutedText">Source: Dedicated RCON</span>
+          <span className="text-xs font-mono text-mutedText">
+            {rconEnabled ? 'RCON Active' : 'Socket Inspection Mode'}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -156,7 +222,7 @@ export function PlayersPage() {
               <tr className="border-b border-border/80 text-mutedText font-medium">
                 <th className="pb-3 pl-2">Player Name</th>
                 <th className="pb-3">Player UID</th>
-                <th className="pb-3">Steam ID</th>
+                <th className="pb-3">Steam ID / Network</th>
                 <th className="pb-3 pr-2 text-right">Moderation</th>
               </tr>
             </thead>
@@ -169,7 +235,7 @@ export function PlayersPage() {
                 </tr>
               ) : (
                 players.map((p) => (
-                  <tr key={p.steamId} className="hover:bg-secondary/40 transition-colors">
+                  <tr key={p.playerUId || p.steamId} className="hover:bg-secondary/40 transition-colors">
                     <td className="py-3 pl-2 font-semibold text-white flex items-center gap-2 font-sans">
                       <span className="w-2 h-2 rounded-full bg-success" />
                       <span>{p.name}</span>
@@ -197,7 +263,39 @@ export function PlayersPage() {
           </table>
         </div>
       </div>
+
+      {/* Registered Saved Players */}
+      {savedPlayers.length > 0 && (
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-accent" />
+            Registered Saved Player Characters ({savedPlayers.length})
+          </h2>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border/80 text-mutedText font-medium">
+                  <th className="pb-3 pl-2">Save GUID / Player ID</th>
+                  <th className="pb-3">Save Data Size</th>
+                  <th className="pb-3 pr-2 text-right">Last Played Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40 font-mono">
+                {savedPlayers.map((sp) => (
+                  <tr key={sp.steamId} className="hover:bg-secondary/40 transition-colors">
+                    <td className="py-2.5 pl-2 text-white">{sp.steamId}</td>
+                    <td className="py-2.5 text-secondaryText">{formatBytes(sp.sizeBytes)}</td>
+                    <td className="py-2.5 pr-2 text-right text-mutedText">
+                      {new Date(sp.lastModified).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

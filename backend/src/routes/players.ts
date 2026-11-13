@@ -7,8 +7,14 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/online', async (req: AuthenticatedRequest, res: Response) => {
-  const players = await PlayerService.getOnlinePlayers();
-  res.json({ count: players.length, players });
+  const result = await PlayerService.getOnlinePlayers();
+  res.json(result);
+});
+
+router.post('/enable-rcon', async (req: AuthenticatedRequest, res: Response) => {
+  const { password } = req.body;
+  const result = await PlayerService.enableRcon(password);
+  res.json(result);
 });
 
 router.post('/kick', async (req: AuthenticatedRequest, res: Response) => {

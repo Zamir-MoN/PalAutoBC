@@ -93,7 +93,13 @@ export const api = {
     }),
 
   // Players
-  getOnlinePlayers: () => request<{ count: number; players: any[] }>('/players/online'),
+  getOnlinePlayers: () =>
+    request<{ count: number; rconEnabled?: boolean; players: any[]; savedPlayers?: any[] }>('/players/online'),
+  enableRcon: (password?: string) =>
+    request<{ success: boolean; message: string }>('/players/enable-rcon', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
   kickPlayer: (steamId: string) =>
     request<any>('/players/kick', {
       method: 'POST',
