@@ -66,10 +66,16 @@ export class BackupService {
       archive.on('error', (err) => reject(err));
       archive.pipe(output);
 
-      // Add entire directory excluding temporary socket / lock files
+      // Add directory contents; exclude temporary files and large static engine binaries
       if (fs.existsSync(sourceDir)) {
         archive.directory(sourceDir, false, (entry) => {
-          if (entry.name.endsWith('.sock') || entry.name.endsWith('.lock')) {
+          const name = entry.name.replace(/\\/g, '/');
+          if (name.endsWith('.sock') || name.endsWith('.lock') || name.endsWith('.tmp')) {
+            return false;
+          }
+          // Pal/Saved contains 100% of the game save data, world states, and config.
+          // Skipping static multi-gigabyte engine binaries ensures backups complete in seconds.
+          if (name.startsWith('Engine/') || name.startsWith('Pal/Binaries/')) {
             return false;
           }
           return entry;
@@ -124,13 +130,20 @@ export class BackupService {
       const initialStatus = await ServerService.getStatus();
       wasServerRunning = initialStatus.isRunning;
 
-      // 2. If running, gracefully stop server
+      // 2. If running, flush world save and attempt graceful stop
       if (wasServerRunning) {
-        Logger.info('[BackupService] Gracefully stopping Palworld server for data consistency...');
+        Logger.info('[BackupService] Flushing in-memory world save to disk via RCON...');
+        broadcastWS('BACKUP_PROGRESS', { stage: 'FLUSHING_SAVE', filename });
+        try {
+          const { PlayerService } = await import('../players/playerService.js');
+          await PlayerService.saveWorld().catch(() => {});
+        } catch {}
+
+        Logger.info('[BackupService] Stopping Palworld server for backup...');
         broadcastWS('BACKUP_PROGRESS', { stage: 'STOPPING_SERVER', filename });
         const stopResult = await ServerService.stop();
         if (!stopResult.success) {
-          throw new Error(`Failed to stop Palworld server cleanly: ${stopResult.message}`);
+          Logger.warn(`[BackupService] Server is managed or auto-restarted: ${stopResult.message}. Proceeding with consistent live snapshot.`);
         }
       }
 

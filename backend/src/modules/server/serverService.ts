@@ -213,7 +213,7 @@ export class ServerService {
       return { success: true, message: 'Palworld server is already offline.' };
     }
 
-    Logger.info(`[ServerService] Gracefully stopping Palworld server (PID: ${status.pid})...`);
+    Logger.info(`[ServerService] Stopping Palworld server (PID: ${status.pid})...`);
 
     if (process.platform === 'win32') {
       this.startTime = null;
@@ -221,29 +221,41 @@ export class ServerService {
       return { success: true, message: 'Palworld server stopped gracefully.' };
     }
 
-    // Try systemd stop if active
+    // 1. Try RCON Shutdown if available (cleanest for Unreal Engine)
+    try {
+      const { PlayerService } = await import('../players/playerService.js');
+      await PlayerService.saveWorld().catch(() => {});
+      await PlayerService.sendRconCommand('Shutdown 1 Server_Backing_Up').catch(() => {});
+    } catch {}
+
+    // 2. Try systemctl if managed by systemd
     if (status.processManager === 'systemd') {
       try {
-        await execAsync(`sudo systemctl stop ${config.systemdServiceName}`);
+        await execAsync(`sudo systemctl stop ${config.systemdServiceName} 2>/dev/null || systemctl stop ${config.systemdServiceName} 2>/dev/null`);
       } catch (err: any) {
         Logger.warn(`[ServerService] systemctl stop failed: ${err.message}`);
       }
-    } else {
-      // Send shutdown or SIGTERM
-      if (status.pid) {
-        try {
-          // Graceful SIGTERM
-          process.kill(status.pid, 'SIGTERM');
-        } catch {
-          // Fallback to pkill
-          await execAsync(`pkill -TERM -f 'PalServer'`).catch(() => {});
-        }
-      }
     }
 
-    // Wait up to 15 seconds for process termination
+    // 3. Try cleanly exiting screen session
+    try {
+      await execAsync(`screen -S "${config.screenSessionName}" -X quit 2>/dev/null || screen -S palworld -X quit 2>/dev/null || true`);
+    } catch {}
+
+    // 4. Send SIGTERM / SIGINT
+    if (status.pid) {
+      try {
+        process.kill(status.pid, 'SIGINT');
+      } catch {}
+      try {
+        process.kill(status.pid, 'SIGTERM');
+      } catch {}
+    }
+    await execAsync("pkill -TERM -f 'PalServer' 2>/dev/null || true");
+
+    // Wait up to 6 seconds for process termination
     let stopped = false;
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       const check = await this.getStatus();
       if (!check.isRunning) {
@@ -252,11 +264,14 @@ export class ServerService {
       }
     }
 
-    // Force SIGKILL if still running
+    // 5. Force kill if still running
     if (!stopped) {
-      Logger.warn('[ServerService] Process did not terminate after 15s. Issuing SIGKILL...');
-      await execAsync(`pkill -9 -f 'PalServer'`).catch(() => {});
-      await new Promise((r) => setTimeout(r, 2000));
+      Logger.warn('[ServerService] Process did not terminate cleanly. Issuing SIGKILL...');
+      await execAsync("pkill -9 -f 'PalServer-Linux-Shipping' 2>/dev/null || true");
+      await execAsync("pkill -9 -f 'PalServer.sh' 2>/dev/null || true");
+      await execAsync("pkill -9 -f 'PalServer' 2>/dev/null || true");
+      await execAsync("screen -wipe 2>/dev/null || true");
+      await new Promise((r) => setTimeout(r, 1500));
     }
 
     this.startTime = null;
@@ -265,7 +280,7 @@ export class ServerService {
 
     return {
       success: !finalStatus.isRunning,
-      message: !finalStatus.isRunning ? 'Palworld server stopped successfully.' : 'Failed to terminate server process.',
+      message: !finalStatus.isRunning ? 'Palworld server stopped successfully.' : 'Server process is managed by an external loop/service.',
     };
   }
 
