@@ -17,6 +17,11 @@ router.get('/remote', async (req: AuthenticatedRequest, res: Response) => {
   res.json(remoteBackups);
 });
 
+router.post('/unlock', (req: AuthenticatedRequest, res: Response) => {
+  BackupService.clearLock();
+  res.json({ success: true, message: 'Backup lock cleared.' });
+});
+
 router.post('/run', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const result = await BackupService.runBackup('manual');

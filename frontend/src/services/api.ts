@@ -64,6 +64,7 @@ export const api = {
   getBackupHistory: () => request<any[]>('/backup/history'),
   getRemoteBackups: () => request<any[]>('/backup/remote'),
   runBackup: () => request<any>('/backup/run', { method: 'POST' }),
+  unlockBackup: () => request<any>('/backup/unlock', { method: 'POST' }),
   getScheduler: () => request<any>('/backup/scheduler'),
   updateScheduler: (data: { time: string; enabled: boolean; timezone: string }) =>
     request<any>('/backup/scheduler', {

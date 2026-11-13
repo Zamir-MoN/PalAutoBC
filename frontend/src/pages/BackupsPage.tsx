@@ -163,7 +163,24 @@ export function BackupsPage() {
       )}
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/30 text-danger text-xs flex items-center justify-between">
-          <span>{errorMsg}</span>
+          <div className="flex items-center gap-2">
+            <span>{errorMsg}</span>
+            {(errorMsg.toLowerCase().includes('already active') || errorMsg.toLowerCase().includes('in progress')) && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.unlockBackup();
+                    setErrorMsg('');
+                    setSuccessMsg('Lock reset successfully. You can now click Create Backup Now.');
+                  } catch {}
+                }}
+                className="underline text-white hover:text-accent font-bold ml-2 cursor-pointer bg-white/10 px-2 py-0.5 rounded"
+              >
+                Reset Lock Now
+              </button>
+            )}
+          </div>
           <button onClick={() => setErrorMsg('')} className="hover:opacity-75">✕</button>
         </div>
       )}

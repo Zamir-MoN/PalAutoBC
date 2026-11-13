@@ -20,18 +20,24 @@ if pgrep -f 'PalServer' > /dev/null 2>&1; then
     PID=$(pgrep -f 'PalServer' | head -n 1)
     if [ -n "$PID" ] && [ -d "/proc/$PID/cwd" ]; then
         DETECTED_PAL_DIR=$(readlink -f "/proc/$PID/cwd")
+        case "$DETECTED_PAL_DIR" in
+            */Pal/Binaries/Linux*) DETECTED_PAL_DIR="$(dirname "$(dirname "$(dirname "$DETECTED_PAL_DIR")")")" ;;
+            */Binaries/Linux*) DETECTED_PAL_DIR="$(dirname "$(dirname "$DETECTED_PAL_DIR")")" ;;
+        esac
         echo "[INFO] Detected running Palworld server at: ${DETECTED_PAL_DIR}"
     fi
 fi
 
-if [ -z "$DETECTED_PAL_DIR" ]; then
+if [ -z "$DETECTED_PAL_DIR" ] || [ ! -d "$DETECTED_PAL_DIR/Pal" ]; then
     CANDIDATES=(
+        "/home/paladmin/palworld"
         "/home/paladmin/Palserver"
         "/home/paladmin/Steam/steamapps/common/PalServer"
         "/home/paladmin"
+        "/home/steam/palworld"
         "/home/steam/Steam/steamapps/common/PalServer"
         "/home/steam/Palserver"
-        "/home/steam/palworld"
+        "/home/ubuntu/palworld"
         "/home/ubuntu/Palserver"
         "/home/ubuntu/Steam/steamapps/common/PalServer"
     )
@@ -60,6 +66,7 @@ npm install --silent
 npm run build
 
 echo "[3/4] Installing systemd service for user '${CURRENT_USER}'..."
+rm -f "${APP_DIR}/data/.backup.lock"
 cat <<EOF | sudo tee /etc/systemd/system/palautobc.service > /dev/null
 [Unit]
 Description=PalAutoBC - Palworld Dedicated Server Management Panel
