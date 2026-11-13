@@ -25,7 +25,6 @@ export class ConfigService {
       }
     }
 
-    // Default target path
     return path.join(config.palworldDir, 'Pal', 'Saved', 'Config', 'LinuxServer', 'PalWorldSettings.ini');
   }
 
@@ -34,10 +33,21 @@ export class ConfigService {
    */
   private static parseOptionSettings(raw: string): Record<string, string | number | boolean> {
     const result: Record<string, string | number | boolean> = {};
-    const match = raw.match(/OptionSettings=\(([\s\S]*?)\)(?:\r?\n|$)/);
-    if (!match || !match[1]) return result;
+    if (!raw) return result;
 
-    const inner = match[1];
+    let inner = '';
+    const match = raw.match(/OptionSettings=\(([\s\S]*?)(?:\)(?:\r?\n|$)|$)/);
+    if (match && match[1]) {
+      inner = match[1];
+    } else {
+      const idx = raw.indexOf('OptionSettings=(');
+      if (idx !== -1) {
+        inner = raw.substring(idx + 'OptionSettings=('.length).replace(/\)\s*$/, '');
+      }
+    }
+
+    if (!inner) return result;
+
     const items: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -62,13 +72,15 @@ export class ConfigService {
         const key = item.substring(0, eqIdx).trim();
         let val: any = item.substring(eqIdx + 1).trim();
 
-        if (val.startsWith('"') && val.endsWith('"')) {
+        while (val.startsWith('"') && val.endsWith('"') && val.length >= 2) {
           val = val.substring(1, val.length - 1);
-        } else if (val.toLowerCase() === 'true') {
+        }
+
+        if (val.toLowerCase() === 'true') {
           val = true;
         } else if (val.toLowerCase() === 'false') {
           val = false;
-        } else if (!isNaN(Number(val)) && val !== '') {
+        } else if (!isNaN(Number(val)) && val !== '' && !val.includes('(')) {
           val = Number(val);
         }
         result[key] = val;
@@ -97,7 +109,6 @@ OptionSettings=(ServerName="Palulu Gang",ServerDescription="",ServerPlayerMaxNum
 
   /**
    * Saves updated settings safely with pre-save snapshot.
-   * Supports either parsed key-value settings OR direct raw text.
    */
   static async saveSettings(
     newSettings: Record<string, any>,
@@ -117,10 +128,8 @@ OptionSettings=(ServerName="Palulu Gang",ServerDescription="",ServerPlayerMaxNum
     let finalContent = '';
 
     if (rawContent && rawContent.trim().length > 0) {
-      // Direct raw INI write
       finalContent = rawContent.trim() + '\n';
     } else {
-      // Merge existing parsed options with new options
       const merged = { ...current.parsed, ...newSettings };
 
       const serializedPairs = Object.entries(merged).map(([key, value]) => {
@@ -129,14 +138,20 @@ OptionSettings=(ServerName="Palulu Gang",ServerDescription="",ServerPlayerMaxNum
         } else if (typeof value === 'number') {
           return `${key}=${value}`;
         } else {
-          return `${key}="${value}"`;
+          let str = String(value).trim();
+          while (str.startsWith('"') && str.endsWith('"') && str.length >= 2) {
+            str = str.substring(1, str.length - 1);
+          }
+          if (str === 'None' || str === 'All' || str === 'Item' || str === 'ItemAndEquipment') {
+            return `${key}=${str}`;
+          }
+          return `${key}="${str}"`;
         }
       });
 
       finalContent = `[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(${serializedPairs.join(',')})\n`;
     }
 
-    // Ensure directory exists
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -147,7 +162,7 @@ OptionSettings=(ServerName="Palulu Gang",ServerDescription="",ServerPlayerMaxNum
 
     return {
       success: true,
-      message: 'PalWorldSettings.ini updated successfully. Restart Palworld server to apply new values.',
+      message: 'PalWorldSettings.ini updated successfully. Please restart Palworld server to apply.',
       requiresRestart: true,
     };
   }

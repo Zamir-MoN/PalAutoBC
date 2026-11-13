@@ -7,14 +7,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Shield,
-  FileCode,
   Eye,
   EyeOff,
   Zap,
-  Layers,
-  Swords,
   Clock,
-  Sparkles,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfigSnapshot } from '../types';
@@ -50,9 +46,14 @@ export function ConfigPage() {
   };
 
   useEffect(() => {
-    animatePageEntrance(containerRef.current);
     loadConfig();
   }, []);
+
+  useEffect(() => {
+    if (!loading && containerRef.current) {
+      animatePageEntrance(containerRef.current);
+    }
+  }, [loading]);
 
   const handleChange = (key: string, value: any) => {
     setSettings((prev) => ({
@@ -138,7 +139,7 @@ export function ConfigPage() {
                 activeTab === 'raw' ? 'bg-card text-white shadow-sm' : 'text-mutedText hover:text-white'
               }`}
             >
-              <FileCode className="w-3.5 h-3.5" />
+              <Sliders className="w-3.5 h-3.5" />
               <span>Raw INI Text</span>
             </button>
           </div>
@@ -173,7 +174,7 @@ export function ConfigPage() {
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-accent" />
+              <Sliders className="w-4 h-4 text-accent" />
               Direct PalWorldSettings.ini Editor
             </h2>
             <span className="text-[11px] text-mutedText font-mono">LinuxServer/PalWorldSettings.ini</span>
@@ -424,7 +425,7 @@ export function ConfigPage() {
           {/* 3. Multipliers & Spawns */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-accent" />
+              <Zap className="w-4 h-4 text-accent" />
               Gameplay & Multipliers
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -499,7 +500,7 @@ export function ConfigPage() {
           {/* 4. Bases, Guilds & PvP */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
-              <Swords className="w-4 h-4 text-accent" />
+              <Shield className="w-4 h-4 text-accent" />
               Bases, Guilds & PvP Combat
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
