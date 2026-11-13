@@ -50,48 +50,75 @@ export class PlayerService {
   }
 
   /**
-   * Executes a native Source RCON command.
+   * Executes a native Source RCON command with full handshake state machine.
    */
   static async sendRconCommand(command: string): Promise<string> {
     const rconCfg = await this.getEffectiveRconConfig();
 
     if (!rconCfg.password) {
-      Logger.debug(`[PlayerService] No AdminPassword configured. RCON skipped.`);
+      Logger.debug(`[PlayerService] No AdminPassword configured in settings. RCON skipped.`);
       return '';
     }
 
     return new Promise((resolve) => {
       const client = new net.Socket();
       let response = '';
+      let authed = false;
+      let buffer = Buffer.alloc(0);
 
       const timeout = setTimeout(() => {
         client.destroy();
-        resolve('');
-      }, 3500);
+        resolve(response.trim());
+      }, 4000);
 
       client.connect(rconCfg.port, '127.0.0.1', () => {
         const authPacket = PlayerService.buildRconPacket(1, 3, rconCfg.password);
         client.write(authPacket);
       });
 
-      client.on('data', (data) => {
-        if (data.length >= 14) {
-          const type = data.readInt32LE(8);
-          if (type === 2) {
-            const cmdPacket = PlayerService.buildRconPacket(2, 2, command);
-            client.write(cmdPacket);
+      client.on('data', (chunk) => {
+        buffer = Buffer.concat([buffer, chunk]);
+
+        while (buffer.length >= 14) {
+          const size = buffer.readInt32LE(0);
+          const totalPacketSize = size + 4;
+          if (buffer.length < totalPacketSize) {
+            break;
+          }
+
+          const id = buffer.readInt32LE(4);
+          const type = buffer.readInt32LE(8);
+          const body = buffer.subarray(12, totalPacketSize - 2).toString('utf-8');
+          buffer = buffer.subarray(totalPacketSize);
+
+          if (!authed) {
+            if (type === 2 && id !== -1) {
+              // Successfully authenticated with Source RCON
+              authed = true;
+              const cmdPacket = PlayerService.buildRconPacket(2, 2, command);
+              client.write(cmdPacket);
+            } else if (id === -1) {
+              // Authentication rejected
+              clearTimeout(timeout);
+              client.destroy();
+              resolve('');
+              return;
+            }
+            // Skip non-auth packets during handshake
           } else {
-            const body = data.subarray(12, data.length - 2).toString('utf-8');
+            // Execution response
             response += body;
             clearTimeout(timeout);
-            client.end();
+            client.destroy();
             resolve(response.trim());
+            return;
           }
         }
       });
 
       client.on('error', () => {
         clearTimeout(timeout);
+        client.destroy();
         resolve('');
       });
     });
@@ -156,7 +183,7 @@ export class PlayerService {
   }
 
   /**
-   * Parses PalServer.log to map player GUIDs / IPs to actual character names.
+   * Parses PalServer.log to map player GUIDs to actual character names.
    */
   private static parsePlayerNamesFromLog(): Map<string, string> {
     const nameMap = new Map<string, string>();
@@ -171,7 +198,7 @@ export class PlayerService {
 
       try {
         const stats = fs.statSync(logPath);
-        const readSize = Math.min(stats.size, 200000); // Read last 200KB
+        const readSize = Math.min(stats.size, 200000);
         const start = stats.size - readSize;
         const fd = fs.openSync(logPath, 'r');
         const buf = Buffer.alloc(readSize);
@@ -186,10 +213,6 @@ export class PlayerService {
           if (m1 && m1[1] && m1[2]) {
             nameMap.set(m1[2].toUpperCase(), m1[1].trim());
           }
-          const m2 = line.match(/Join succeeded:\s*([^\s,]+)/i);
-          if (m2 && m2[1]) {
-            nameMap.set(`RECENT_${nameMap.size}`, m2[1].trim());
-          }
         }
       } catch {}
     }
@@ -198,95 +221,9 @@ export class PlayerService {
   }
 
   /**
-   * Checks for open character .sav file handles under /proc/<pid>/fd.
-   */
-  private static async getOpenFdPlayerGuids(): Promise<Set<string>> {
-    const openGuids = new Set<string>();
-    if (process.platform === 'win32') return openGuids;
-
-    try {
-      const { stdout: pids } = await execAsync("pgrep -f 'PalServer-Linux|PalServer.sh' 2>/dev/null").catch(() => ({ stdout: '' }));
-      const pidList = pids.trim().split('\n').filter(Boolean);
-
-      for (const p of pidList) {
-        const fdDir = `/proc/${p.trim()}/fd`;
-        if (fs.existsSync(fdDir)) {
-          try {
-            const fds = fs.readdirSync(fdDir);
-            for (const fd of fds) {
-              try {
-                const target = fs.readlinkSync(path.join(fdDir, fd));
-                if (target.endsWith('.sav') && target.includes('/Players/')) {
-                  const guid = path.basename(target, '.sav');
-                  openGuids.add(guid.toUpperCase());
-                }
-              } catch {}
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-
-    return openGuids;
-  }
-
-  /**
-   * Inspects Linux netfilter conntrack and socket statistics for live UDP game clients on port 8211.
-   */
-  private static async getActiveUdpClients(): Promise<Set<string>> {
-    const activeClients = new Set<string>();
-    if (process.platform === 'win32') return activeClients;
-
-    // 1. Try reading /proc/net/nf_conntrack directly
-    try {
-      if (fs.existsSync('/proc/net/nf_conntrack')) {
-        const ct = fs.readFileSync('/proc/net/nf_conntrack', 'utf-8');
-        for (const line of ct.split('\n')) {
-          if (line.includes('dport=8211') || line.includes('sport=8211')) {
-            const src = line.match(/src=([0-9.]+)/);
-            if (src && src[1] && src[1] !== '127.0.0.1' && !src[1].startsWith('0.')) {
-              activeClients.add(src[1]);
-            }
-          }
-        }
-      }
-    } catch {}
-
-    // 2. Try conntrack command line tool if available
-    try {
-      const { stdout: ctCli } = await execAsync("conntrack -L -p udp --dport 8211 2>/dev/null || true").catch(() => ({ stdout: '' }));
-      if (ctCli) {
-        for (const match of ctCli.matchAll(/src=([0-9.]+)/g)) {
-          if (match[1] && match[1] !== '127.0.0.1') {
-            activeClients.add(match[1]);
-          }
-        }
-      }
-    } catch {}
-
-    // 3. Check ss command output
-    try {
-      const { stdout: ssOut } = await execAsync("ss -uan 2>/dev/null | grep ':8211' || true").catch(() => ({ stdout: '' }));
-      if (ssOut) {
-        const lines = ssOut.trim().split('\n');
-        for (const line of lines) {
-          const match = line.match(/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):[0-9]+\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):[0-9]+/);
-          if (match && match[2] && match[2] !== '0.0.0.0' && match[2] !== '127.0.0.1') {
-            activeClients.add(match[2]);
-          }
-        }
-      }
-    } catch {}
-
-    return activeClients;
-  }
-
-  /**
-   * Queries online players across all resilient detection channels:
-   * 1. Source RCON 'ShowPlayers'
-   * 2. Open process file handles (/proc/<pid>/fd/*.sav)
-   * 3. Save Game heartbeats (*.sav modification within 30m OR correlated with Level.sav)
-   * 4. Linux Kernel Netfilter Conntrack UDP clients
+   * Queries online players with pinpoint accuracy:
+   * 1. Primary: Source RCON 'ShowPlayers' (reports exact currently connected players)
+   * 2. Fallback: Save Game synchronization with Level.sav (identifies only players saved in the active autosave tick)
    */
   static async getOnlinePlayers(): Promise<{
     count: number;
@@ -297,44 +234,19 @@ export class PlayerService {
     const rconCfg = await this.getEffectiveRconConfig();
     const onlinePlayers: PlayerInfo[] = [];
     const nameMap = this.parsePlayerNamesFromLog();
-    const openFdGuids = await this.getOpenFdPlayerGuids();
-    const activeUdpClients = await this.getActiveUdpClients();
 
-    // 1. RCON ShowPlayers
-    if (rconCfg.password) {
-      try {
-        const raw = await this.sendRconCommand('ShowPlayers');
-        if (raw) {
-          const lines = raw.split('\n');
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const parts = line.split(',');
-            if (parts.length >= 3) {
-              onlinePlayers.push({
-                name: parts[0].trim(),
-                playerUId: parts[1].trim(),
-                steamId: parts[2].trim(),
-                status: 'online',
-                lastOnline: 'Active Now (RCON)',
-              });
-            }
-          }
-        }
-      } catch {}
-    }
-
-    // 2. Scan Save Game Profiles & Heartbeats
+    // Collect all registered player save profiles on disk
     const savedPlayers: { steamId: string; lastModified: string; sizeBytes: number; isRecent: boolean }[] = [];
     const playersDirs = this.findPlayersFolders();
 
+    // Map to hold Level.sav timestamps for each world
+    const worldLevelTimes = new Map<string, number>();
+
     for (const pDir of playersDirs) {
       try {
-        // Check Level.sav timestamp in world folder
-        let levelSavMtime: number | null = null;
         const levelSavPath = path.join(pDir, '..', 'Level.sav');
         if (fs.existsSync(levelSavPath)) {
-          levelSavMtime = fs.statSync(levelSavPath).mtime.getTime();
+          worldLevelTimes.set(pDir, fs.statSync(levelSavPath).mtime.getTime());
         }
 
         const files = fs.readdirSync(pDir);
@@ -344,66 +256,101 @@ export class PlayerService {
           const fPath = path.join(pDir, f);
           const fStats = fs.statSync(fPath);
           const guid = f.replace('.sav', '');
-          const diffMinutes = (Date.now() - fStats.mtime.getTime()) / (1000 * 60);
-
-          // Heartbeat criteria:
-          // A: File modified in the last 30 minutes
-          // B: File modified within 5 minutes of Level.sav (Unreal Engine autosave synchronization)
-          // C: Server process has open file descriptor to this .sav
-          const matchesLevelSav = levelSavMtime !== null && Math.abs((fStats.mtime.getTime() - levelSavMtime) / 1000) <= 300;
-          const hasOpenFd = openFdGuids.has(guid.toUpperCase());
-          const isRecent = diffMinutes <= 30 || matchesLevelSav || hasOpenFd;
 
           savedPlayers.push({
             steamId: guid,
             lastModified: fStats.mtime.toISOString(),
             sizeBytes: fStats.size,
-            isRecent,
+            isRecent: false,
           });
+        }
+      } catch {}
+    }
 
-          // If online and not already recorded from RCON
-          const alreadyAdded = onlinePlayers.some(
-            (p) => p.playerUId.toLowerCase() === guid.toLowerCase() || p.steamId.toLowerCase() === guid.toLowerCase()
-          );
+    // 1. Authoritative Tier: Source RCON ShowPlayers
+    let rconWorking = false;
+    if (rconCfg.enabled && rconCfg.password) {
+      try {
+        const raw = await this.sendRconCommand('ShowPlayers');
+        if (raw) {
+          rconWorking = true;
+          const lines = raw.split('\n');
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(',');
+            if (parts.length >= 3 && parts[0].trim() && parts[1].trim()) {
+              onlinePlayers.push({
+                name: parts[0].trim(),
+                playerUId: parts[1].trim(),
+                steamId: parts[2].trim(),
+                status: 'online',
+                lastOnline: 'Active Now (RCON)',
+              });
+            }
+          }
 
-          if (isRecent && !alreadyAdded) {
-            const knownName = nameMap.get(guid.toUpperCase()) || `Palworld Adventurer (${guid.substring(0, 8)})`;
-            onlinePlayers.push({
-              name: knownName,
-              playerUId: guid,
-              steamId: guid,
-              status: 'online',
-              lastOnline: diffMinutes < 1 ? 'Active Now' : `${Math.round(diffMinutes)}m ago`,
-            });
+          Logger.info(`[PlayerService] RCON ShowPlayers returned ${onlinePlayers.length} active players.`);
+          return {
+            count: onlinePlayers.length,
+            rconEnabled: true,
+            players: onlinePlayers,
+            savedPlayers: savedPlayers.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()),
+          };
+        }
+      } catch (err: any) {
+        Logger.debug(`[PlayerService] RCON query failed: ${err.message}`);
+      }
+    }
+
+    // 2. High-Precision Fallback: Unreal Engine Autosave Synchronization
+    // In Palworld, when the server autosaves, Level.sav and all online players' .sav files
+    // are modified within 15 seconds of each other. Offline players are NOT modified.
+    for (const pDir of playersDirs) {
+      try {
+        const levelMtime = worldLevelTimes.get(pDir);
+        const levelDiffFromNowSec = levelMtime ? (Date.now() - levelMtime) / 1000 : 999999;
+        const files = fs.readdirSync(pDir);
+
+        for (const f of files) {
+          if (!f.endsWith('.sav')) continue;
+
+          const fPath = path.join(pDir, f);
+          const fStats = fs.statSync(fPath);
+          const guid = f.replace('.sav', '');
+          const diffSecondsFromNow = (Date.now() - fStats.mtime.getTime()) / 1000;
+
+          // Player is online ONLY IF:
+          // A: Server saved Level.sav recently (< 300s) AND this player was saved within 15s of Level.sav
+          // OR B: Player's file was modified in the last 90 seconds (active gameplay auto-tick)
+          const matchesLevelSav = levelMtime !== undefined && levelDiffFromNowSec <= 300 && Math.abs(fStats.mtime.getTime() - levelMtime) <= 15000;
+          const isActivelyModified = diffSecondsFromNow <= 90;
+
+          if (matchesLevelSav || isActivelyModified) {
+            const alreadyAdded = onlinePlayers.some(
+              (p) => p.playerUId.toLowerCase() === guid.toLowerCase() || p.steamId.toLowerCase() === guid.toLowerCase()
+            );
+
+            if (!alreadyAdded) {
+              const knownName = nameMap.get(guid.toUpperCase()) || `Palworld Adventurer (${guid.substring(0, 8)})`;
+              onlinePlayers.push({
+                name: knownName,
+                playerUId: guid,
+                steamId: guid,
+                status: 'online',
+                lastOnline: diffSecondsFromNow < 60 ? 'Active Now' : `${Math.round(diffSecondsFromNow / 60)}m ago`,
+              });
+            }
           }
         }
       } catch {}
     }
 
-    // 3. Fallback: If network connection tracking detected more active UDP clients than players
-    const targetCount = Math.max(onlinePlayers.length, activeUdpClients.size);
-    if (onlinePlayers.length < targetCount) {
-      let clientIndex = 1;
-      for (const ip of activeUdpClients) {
-        if (!onlinePlayers.some((p) => p.steamId.includes(ip))) {
-          onlinePlayers.push({
-            name: `Active Player #${clientIndex}`,
-            playerUId: `UDP_SESSION_${ip.replace(/\./g, '_')}`,
-            steamId: `IP: ${ip}`,
-            status: 'online',
-            lastOnline: 'Active Now (Game Session)',
-          });
-          clientIndex++;
-        }
-      }
-    }
-
-    const finalCount = onlinePlayers.length;
-    Logger.debug(`[PlayerService] Detection summary: ${finalCount} online players, ${savedPlayers.length} total saved profiles.`);
+    Logger.info(`[PlayerService] Live detection complete: ${onlinePlayers.length} online, ${savedPlayers.length} registered character profiles.`);
 
     return {
-      count: finalCount,
-      rconEnabled: rconCfg.enabled && Boolean(rconCfg.password),
+      count: onlinePlayers.length,
+      rconEnabled: rconWorking || (rconCfg.enabled && Boolean(rconCfg.password)),
       players: onlinePlayers,
       savedPlayers: savedPlayers.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()),
     };
