@@ -65,6 +65,15 @@ export class ServerService {
         isRunning = true;
         pid = foundPid;
 
+        // Read live process working directory from /proc/<pid>/cwd
+        try {
+          const { stdout: cwdOut } = await execAsync(`readlink -f /proc/${pid}/cwd`).catch(() => ({ stdout: '' }));
+          const liveCwd = cwdOut.trim();
+          if (liveCwd && fs.existsSync(liveCwd)) {
+            config.palworldDir = liveCwd;
+          }
+        } catch {}
+
         // Fetch CPU and Memory usage for PID
         try {
           const { stdout: psOut } = await execAsync(`ps -p ${pid} -o %cpu,rss --no-headers`);

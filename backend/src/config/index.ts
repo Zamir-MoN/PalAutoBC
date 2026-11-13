@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -5,13 +6,39 @@ dotenv.config();
 
 const ROOT_DIR = path.resolve(process.cwd());
 
+function resolvePalworldDir(): string {
+  if (process.env.PALWORLD_DIR && fs.existsSync(process.env.PALWORLD_DIR)) {
+    return process.env.PALWORLD_DIR;
+  }
+
+  // Common user locations on Ubuntu VPS (paladmin, steam, ubuntu)
+  const candidates = [
+    '/home/paladmin/Palserver',
+    '/home/paladmin/Steam/steamapps/common/PalServer',
+    '/home/paladmin',
+    '/home/steam/Steam/steamapps/common/PalServer',
+    '/home/steam/Palserver',
+    '/home/steam/palworld',
+    '/home/ubuntu/Palserver',
+    '/home/ubuntu/Steam/steamapps/common/PalServer',
+  ];
+
+  for (const dir of candidates) {
+    if (fs.existsSync(dir) && (fs.existsSync(path.join(dir, 'PalServer.sh')) || fs.existsSync(path.join(dir, 'Pal')))) {
+      return dir;
+    }
+  }
+
+  return process.env.PALWORLD_DIR || '/home/ubuntu/Palserver';
+}
+
 export const config = {
   env: process.env.NODE_ENV || 'production',
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
 
-  // Palworld Server Settings
-  palworldDir: process.env.PALWORLD_DIR || '/home/ubuntu/Palserver',
+  // Palworld Server Settings (auto-detected across paladmin, steam, ubuntu)
+  palworldDir: resolvePalworldDir(),
   palworldExecutable: process.env.PALWORLD_EXEC || './PalServer.sh',
   palworldPort: parseInt(process.env.PALWORLD_PORT || '8211', 10),
   screenSessionName: process.env.SCREEN_SESSION || 'palworld',
