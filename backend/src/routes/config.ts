@@ -12,13 +12,13 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.put('/settings', async (req: AuthenticatedRequest, res: Response) => {
-  const { settings } = req.body;
-  if (!settings || typeof settings !== 'object') {
-    res.status(400).json({ error: 'Settings object is required.' });
+  const { settings, rawContent } = req.body;
+  if (!settings && !rawContent) {
+    res.status(400).json({ error: 'Settings object or rawContent string is required.' });
     return;
   }
 
-  const result = await ConfigService.saveSettings(settings, req.user?.username || 'admin');
+  const result = await ConfigService.saveSettings(settings || {}, rawContent, req.user?.username || 'admin');
   res.json(result);
 });
 

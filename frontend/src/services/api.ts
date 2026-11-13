@@ -82,11 +82,13 @@ export const api = {
 
   // Config
   getConfigSettings: () => request<{ raw: string; parsed: Record<string, any> }>('/config/settings'),
-  updateConfigSettings: (settings: Record<string, any>) =>
-    request<{ success: boolean; message: string; requiresRestart: boolean }>('/config/settings', {
+  updateConfigSettings: (payload: { settings?: Record<string, any>; rawContent?: string } | Record<string, any>) => {
+    const body = 'settings' in payload || 'rawContent' in payload ? payload : { settings: payload };
+    return request<{ success: boolean; message: string; requiresRestart: boolean }>('/config/settings', {
       method: 'PUT',
-      body: JSON.stringify({ settings }),
-    }),
+      body: JSON.stringify(body),
+    });
+  },
   getConfigSnapshots: () => request<any[]>('/config/snapshots'),
   restoreConfigSnapshot: (id: string) =>
     request<{ success: boolean; message: string }>(`/config/snapshots/${id}/restore`, {
