@@ -1,60 +1,62 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# PalAutoBC — Automated Full Server Backup Script for Palworld Dedicated Server
+# PalAutoBC — Fast Zero-Downtime Backup Script for Palworld Dedicated Server
 # ==============================================================================
 set -euo pipefail
 
-PALWORLD_DIR="${PALWORLD_DIR:-/home/ubuntu/Palserver}"
-RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
-RCLONE_FOLDER="${RCLONE_FOLDER:-PalworldBackups}"
-TEMP_DIR="${TEMP_DIR:-/home/ubuntu/PalAutoBC/data/temporary-backups}"
-LOCK_FILE="/tmp/palautobc_backup.lock"
+# Auto-detect Palworld server directory across common paths
+if [ -d "/home/paladmin/palworld" ]; then
+    PAL_DIR="/home/paladmin/palworld"
+elif [ -d "/home/paladmin/Palserver" ]; then
+    PAL_DIR="/home/paladmin/Palserver"
+elif [ -d "/home/steam/palworld" ]; then
+    PAL_DIR="/home/steam/palworld"
+elif [ -d "/home/ubuntu/Palserver" ]; then
+    PAL_DIR="/home/ubuntu/Palserver"
+else
+    PAL_DIR="${HOME}/palworld"
+fi
 
-mkdir -p "$TEMP_DIR"
-
-# 1. Acquire Lock
-exec 200>"$LOCK_FILE"
-flock -n 200 || { echo "[ERROR] Another backup is currently in progress. Exiting."; exit 1; }
-
+RCLONE_REMOTE="gdrive"
+RCLONE_FOLDER="PalworldBackups"
+TEMP_DIR="${HOME}/PalAutoBC/data/temporary-backups"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 FILENAME="palbc_${TIMESTAMP}.zip"
 LOCAL_ZIP="${TEMP_DIR}/${FILENAME}"
 
-echo "[INFO] Starting full Palworld server backup: ${FILENAME}"
+mkdir -p "${TEMP_DIR}"
 
-# 2. Check if Palworld server is running
-WAS_RUNNING=0
-if pgrep -f 'PalServer-Linux' > /dev/null 2>&1; then
-    WAS_RUNNING=1
-    echo "[INFO] Palworld server is currently running. Stopping gracefully for save integrity..."
-    pkill -TERM -f 'PalServer' || true
-    sleep 5
+echo "=================================================="
+echo " PalAutoBC: Manual Palworld Backup to Google Drive"
+echo "=================================================="
+echo "[1/4] Target directory : ${PAL_DIR}/Pal/Saved"
+echo "[2/4] Destination file : ${FILENAME}"
+
+if [ ! -d "${PAL_DIR}/Pal/Saved" ]; then
+    echo "[ERROR] Pal/Saved directory not found in ${PAL_DIR}!"
+    exit 1
 fi
 
-# 3. Create full ZIP archive
-echo "[INFO] Creating ZIP archive of ${PALWORLD_DIR}..."
-zip -r -q -9 "${LOCAL_ZIP}" "${PALWORLD_DIR}" -x "*.sock" "*.lock" "*/Logs/*"
+echo "[3/4] Creating compressed archive of world & player save data..."
+cd "${PAL_DIR}"
+zip -r -q "${LOCAL_ZIP}" Pal/Saved PalServer.sh -x "*.sock" "*.lock" "*.tmp" 2>/dev/null || \
+zip -r -q "${LOCAL_ZIP}" Pal/Saved -x "*.sock" "*.lock" "*.tmp"
 
-# 4. Compute Checksum & Upload to Google Drive via rclone
-echo "[INFO] Uploading archive to Google Drive (${RCLONE_REMOTE}:${RCLONE_FOLDER})..."
-rclone copyto "${LOCAL_ZIP}" "${RCLONE_REMOTE}:${RCLONE_FOLDER}/${FILENAME}" --checksum
+ARCHIVE_SIZE=$(du -h "${LOCAL_ZIP}" | cut -f1)
+echo "[INFO] Archive generated (${ARCHIVE_SIZE})."
 
-# 5. Verify remote file
-echo "[INFO] Verifying remote archive on Google Drive..."
+echo "[4/4] Uploading to Google Drive (${RCLONE_REMOTE}:${RCLONE_FOLDER})..."
+rclone copyto "${LOCAL_ZIP}" "${RCLONE_REMOTE}:${RCLONE_FOLDER}/${FILENAME}" --checksum -P
+
+echo "[INFO] Verifying archive on Google Drive..."
 if rclone lsjson "${RCLONE_REMOTE}:${RCLONE_FOLDER}/${FILENAME}" | grep -q "${FILENAME}"; then
-    echo "[INFO] Verification succeeded. Deleting temporary local ZIP..."
+    echo "[SUCCESS] Remote verification passed!"
     rm -f "${LOCAL_ZIP}"
+    echo "[INFO] Cleaned up temporary local archive."
 else
-    echo "[WARNING] Remote verification failed! Preserving local archive ${LOCAL_ZIP}"
+    echo "[WARNING] Remote verification check failed. Local archive kept at: ${LOCAL_ZIP}"
 fi
 
-# 6. Guaranteed restart if server was running
-if [ "${WAS_RUNNING}" -eq 1 ]; then
-    echo "[INFO] Executing guaranteed Palworld server restart..."
-    cd "${PALWORLD_DIR}"
-    screen -dmS palworld ./PalServer.sh -port=8211 -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS
-    echo "[INFO] Palworld server restarted in screen session 'palworld'."
-fi
-
-echo "[SUCCESS] Backup workflow completed successfully for ${FILENAME}."
-
+echo "=================================================="
+echo " Backup Completed Successfully: ${FILENAME}"
+echo "=================================================="
