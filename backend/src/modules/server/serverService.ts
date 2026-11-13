@@ -251,7 +251,9 @@ export class ServerService {
         process.kill(status.pid, 'SIGTERM');
       } catch {}
     }
-    await execAsync("pkill -TERM -f 'PalServer' 2>/dev/null || true");
+    try {
+      await execAsync("pkill -TERM -f 'PalServer' 2>/dev/null || true");
+    } catch {}
 
     // Wait up to 6 seconds for process termination
     let stopped = false;
@@ -267,10 +269,10 @@ export class ServerService {
     // 5. Force kill if still running
     if (!stopped) {
       Logger.warn('[ServerService] Process did not terminate cleanly. Issuing SIGKILL...');
-      await execAsync("pkill -9 -f 'PalServer-Linux-Shipping' 2>/dev/null || true");
-      await execAsync("pkill -9 -f 'PalServer.sh' 2>/dev/null || true");
-      await execAsync("pkill -9 -f 'PalServer' 2>/dev/null || true");
-      await execAsync("screen -wipe 2>/dev/null || true");
+      try { await execAsync("pkill -9 -f 'PalServer-Linux-Shipping' 2>/dev/null || true"); } catch {}
+      try { await execAsync("pkill -9 -f 'PalServer.sh' 2>/dev/null || true"); } catch {}
+      try { await execAsync("pkill -9 -f 'PalServer' 2>/dev/null || true"); } catch {}
+      try { await execAsync("screen -wipe 2>/dev/null || true"); } catch {}
       await new Promise((r) => setTimeout(r, 1500));
     }
 

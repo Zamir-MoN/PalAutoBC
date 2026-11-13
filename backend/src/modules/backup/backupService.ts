@@ -130,21 +130,15 @@ export class BackupService {
       const initialStatus = await ServerService.getStatus();
       wasServerRunning = initialStatus.isRunning;
 
-      // 2. If running, flush world save and attempt graceful stop
+      // 2. If running, ensure all in-memory game state is flushed to disk via RCON Save
       if (wasServerRunning) {
         Logger.info('[BackupService] Flushing in-memory world save to disk via RCON...');
         broadcastWS('BACKUP_PROGRESS', { stage: 'FLUSHING_SAVE', filename });
         try {
           const { PlayerService } = await import('../players/playerService.js');
           await PlayerService.saveWorld().catch(() => {});
+          await new Promise((r) => setTimeout(r, 1000));
         } catch {}
-
-        Logger.info('[BackupService] Stopping Palworld server for backup...');
-        broadcastWS('BACKUP_PROGRESS', { stage: 'STOPPING_SERVER', filename });
-        const stopResult = await ServerService.stop();
-        if (!stopResult.success) {
-          Logger.warn(`[BackupService] Server is managed or auto-restarted: ${stopResult.message}. Proceeding with consistent live snapshot.`);
-        }
       }
 
       // 3. Create complete ZIP archive of Palserver directory
@@ -242,13 +236,13 @@ export class BackupService {
       broadcastWS('BACKUP_PROGRESS', { stage: 'FAILED', error: err.message, filename });
       throw err;
     } finally {
-      // 7. CRITICAL GUARANTEED RESTART HANDLING
+      // 7. Ensure server is running if it was running before
       if (wasServerRunning) {
-        Logger.info('[BackupService] Executing guaranteed server restart...');
         try {
-          const restartResult = await ServerService.start();
-          if (!restartResult.success) {
-            Logger.error(`[BackupService] Guaranteed restart warning: ${restartResult.message}`);
+          const check = await ServerService.getStatus();
+          if (!check.isRunning) {
+            Logger.info('[BackupService] Restoring Palworld server to running state...');
+            await ServerService.start();
           }
         } catch (restartErr: any) {
           Logger.error(`[BackupService] Failed to restart server after backup: ${restartErr.message}`);
