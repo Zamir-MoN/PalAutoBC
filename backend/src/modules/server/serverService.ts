@@ -179,24 +179,32 @@ export class ServerService {
       }
 
       // Ensure execute permissions
-      await execAsync(`chmod +x "${execPath}"`);
+      try { await execAsync(`chmod +x "${execPath}"`); } catch {}
 
-      // Launch inside GNU Screen detached session
-      const startCmd = `cd "${config.palworldDir}" && screen -dmS ${config.screenSessionName} ${config.palworldExecutable} -port=${config.palworldPort} -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS`;
+      // Wipe any dead screen sessions first
+      try { await execAsync('screen -wipe 2>/dev/null || true'); } catch {}
+
+      // Launch inside GNU Screen detached session using bash
+      const startCmd = `cd "${config.palworldDir}" && screen -dmS "${config.screenSessionName}" bash "${execPath}" -port=${config.palworldPort} -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS`;
       await execAsync(startCmd);
 
-      // Wait 3 seconds and verify
-      await new Promise((r) => setTimeout(r, 3000));
-      const verifyStatus = await this.getStatus();
-
-      if (verifyStatus.isRunning) {
-        this.startTime = new Date();
-        broadcastWS('SERVER_STATUS_CHANGE', verifyStatus);
-        Logger.info(`[ServerService] Palworld server started successfully in screen (PID: ${verifyStatus.pid})`);
-        return { success: true, message: 'Palworld server started successfully.', pid: verifyStatus.pid || undefined };
-      } else {
-        return { success: false, message: 'Startup command was executed but server process did not remain active. Inspect server logs.' };
+      // Poll up to 6 seconds to confirm process is active
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const verifyStatus = await this.getStatus();
+        if (verifyStatus.isRunning) {
+          this.startTime = new Date();
+          broadcastWS('SERVER_STATUS_CHANGE', verifyStatus);
+          Logger.info(`[ServerService] Palworld server started successfully in screen (PID: ${verifyStatus.pid})`);
+          return { success: true, message: 'Palworld server started successfully.', pid: verifyStatus.pid || undefined };
+        }
       }
+
+      const checkNow = await this.getStatus();
+      if (checkNow.isRunning) {
+        return { success: true, message: 'Palworld server started successfully.', pid: checkNow.pid || undefined };
+      }
+      return { success: false, message: 'Startup command was executed but server process did not remain active. Check logs.' };
     } catch (err: any) {
       Logger.error(`[ServerService] Startup failure: ${err.message}`);
       return { success: false, message: `Failed to start server: ${err.message}` };

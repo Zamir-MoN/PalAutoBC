@@ -12,9 +12,9 @@ import {
   EyeOff,
   Zap,
   Layers,
-  Sword,
+  Swords,
   Clock,
-  Egg,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { ConfigSnapshot } from '../types';
@@ -499,7 +499,7 @@ export function ConfigPage() {
           {/* 4. Bases, Guilds & PvP */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
-              <Sword className="w-4 h-4 text-accent" />
+              <Swords className="w-4 h-4 text-accent" />
               Bases, Guilds & PvP Combat
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
