@@ -32,14 +32,22 @@ router.post('/run', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.get('/scheduler', (req: AuthenticatedRequest, res: Response) => {
-  const schedule = SchedulerService.getSchedule();
-  res.json(schedule);
+  try {
+    const schedule = SchedulerService.getSchedule();
+    res.json(schedule || null);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.put('/scheduler', (req: AuthenticatedRequest, res: Response) => {
-  const { time, enabled, timezone } = req.body;
-  const updated = SchedulerService.updateSchedule(time, enabled, timezone);
-  res.json(updated);
+  try {
+    const { time, enabled, timezone } = req.body;
+    const updated = SchedulerService.updateSchedule(time, enabled, timezone);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
