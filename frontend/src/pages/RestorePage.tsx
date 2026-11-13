@@ -29,9 +29,10 @@ export function RestorePage() {
   useEffect(() => {
     animatePageEntrance(containerRef.current);
     api.getRemoteBackups().then((res) => {
-      setRemoteBackups(res);
-      if (res.length > 0) {
-        setSelectedBackup(res[0].Name);
+      const list = Array.isArray(res) ? res : [];
+      setRemoteBackups(list);
+      if (list.length > 0) {
+        setSelectedBackup(list[0].Name);
       }
     }).catch(() => {});
 

@@ -7,31 +7,46 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
-  const settings = await ConfigService.readSettings();
-  res.json(settings);
+  try {
+    const settings = await ConfigService.readSettings();
+    res.json(settings);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to read settings' });
+  }
 });
 
 router.put('/settings', async (req: AuthenticatedRequest, res: Response) => {
-  const { settings, rawContent } = req.body;
-  if (!settings && !rawContent) {
-    res.status(400).json({ error: 'Settings object or rawContent string is required.' });
-    return;
+  try {
+    const { settings, rawContent } = req.body;
+    if (!settings && !rawContent) {
+      res.status(400).json({ error: 'Settings object or rawContent string is required.' });
+      return;
+    }
+
+    const result = await ConfigService.saveSettings(settings || {}, rawContent, req.user?.username || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to save settings' });
   }
-
-  const result = await ConfigService.saveSettings(settings || {}, rawContent, req.user?.username || 'admin');
-  res.json(result);
 });
 
-router.get('/snapshots', (req: AuthenticatedRequest, res: Response) => {
-  const snapshots = ConfigService.getSnapshots();
-  res.json(snapshots);
+router.get('/snapshots', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const snapshots = await ConfigService.getSnapshots();
+    res.json(Array.isArray(snapshots) ? snapshots : []);
+  } catch (err: any) {
+    res.json([]);
+  }
 });
 
-router.post('/snapshots/:id/restore', (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
-  const result = ConfigService.restoreSnapshot(id);
-  res.json(result);
+router.post('/snapshots/:id/restore', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await ConfigService.restoreSnapshot(id);
+    res.json({ success: true, message: 'Snapshot restored successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to restore snapshot' });
+  }
 });
 
 export default router;
-

@@ -32,12 +32,12 @@ export function ConfigPage() {
     try {
       setLoading(true);
       const [res, snaps] = await Promise.all([
-        api.getConfigSettings(),
-        api.getConfigSnapshots(),
+        api.getConfigSettings().catch(() => ({ raw: '', parsed: {} })),
+        api.getConfigSnapshots().catch(() => []),
       ]);
-      setSettings(res.parsed || {});
-      setRawIni(res.raw || '');
-      setSnapshots(snaps || []);
+      setSettings(res?.parsed || {});
+      setRawIni(res?.raw || '');
+      setSnapshots(Array.isArray(snaps) ? snaps : []);
     } catch (err: any) {
       setError(err.message || 'Failed to read PalWorldSettings.ini');
     } finally {
@@ -80,12 +80,12 @@ export function ConfigPage() {
       setMessage(res.message);
       // Reload both parsed and raw to sync
       const [newConfig, snaps] = await Promise.all([
-        api.getConfigSettings(),
-        api.getConfigSnapshots(),
+        api.getConfigSettings().catch(() => ({ raw: '', parsed: {} })),
+        api.getConfigSnapshots().catch(() => []),
       ]);
-      setSettings(newConfig.parsed || {});
-      setRawIni(newConfig.raw || '');
-      setSnapshots(snaps || []);
+      setSettings(newConfig?.parsed || {});
+      setRawIni(newConfig?.raw || '');
+      setSnapshots(Array.isArray(snaps) ? snaps : []);
     } catch (err: any) {
       setError(err.message || 'Failed to update settings');
     } finally {
@@ -610,7 +610,7 @@ export function ConfigPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40 font-mono">
-              {snapshots.length === 0 ? (
+              {!Array.isArray(snapshots) || snapshots.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-6 text-center text-mutedText font-sans">
                     No snapshots recorded yet.

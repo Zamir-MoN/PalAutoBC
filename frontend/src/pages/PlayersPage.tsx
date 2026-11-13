@@ -31,8 +31,8 @@ export function PlayersPage() {
     try {
       setLoading(true);
       const res = await api.getOnlinePlayers();
-      setPlayers(res.players || []);
-      setSavedPlayers(res.savedPlayers || []);
+      setPlayers(Array.isArray(res?.players) ? res.players : []);
+      setSavedPlayers(Array.isArray(res?.savedPlayers) ? res.savedPlayers : []);
       if (res.rconEnabled !== undefined) {
         setRconEnabled(res.rconEnabled);
       }

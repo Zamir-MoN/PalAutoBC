@@ -39,8 +39,8 @@ export function BackupsPage() {
         api.getRemoteBackups(),
         api.getScheduler(),
       ]);
-      setHistory(hist);
-      setRemoteBackups(rem);
+      setHistory(Array.isArray(hist) ? hist : []);
+      setRemoteBackups(Array.isArray(rem) ? rem : []);
       if (sched) {
         setSchedule(sched);
         setScheduleTime(sched.backup_time || '03:00');
