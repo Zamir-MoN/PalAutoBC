@@ -34,16 +34,40 @@ export function ConsolePage() {
     animatePageEntrance(containerRef.current);
 
     // Initial recent logs
-    api.getConsoleLogs(150).then(setLogs).catch(() => {});
+    api.getConsoleLogs(150).then((data) => {
+      if (Array.isArray(data)) setLogs(data);
+    }).catch(() => {});
+
+    // Periodic sync backup (every 3s) in case WebSocket has latency
+    const pollInterval = setInterval(() => {
+      if (!isPaused) {
+        api.getConsoleLogs(150).then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setLogs((prev) => {
+              const existingIds = new Set(prev.map((l) => l.id));
+              const newEntries = data.filter((d) => !existingIds.has(d.id));
+              if (newEntries.length === 0) return prev;
+              return [...prev, ...newEntries].slice(-500);
+            });
+          }
+        }).catch(() => {});
+      }
+    }, 3000);
 
     // Live WebSocket log streaming
     const unsub = subscribe('CONSOLE_LOG', (entry: ConsoleLog) => {
-      if (!isPaused) {
-        setLogs((prev) => [...prev.slice(-400), entry]);
+      if (!isPaused && entry) {
+        setLogs((prev) => {
+          if (prev.some((l) => l.id === entry.id)) return prev;
+          return [...prev.slice(-400), entry];
+        });
       }
     });
 
-    return unsub;
+    return () => {
+      clearInterval(pollInterval);
+      unsub();
+    };
   }, [subscribe, isPaused]);
 
   // Auto-scroll effect
@@ -61,10 +85,41 @@ export function ConsolePage() {
     setCommandInput('');
     setExecuting(true);
 
+    // Immediate optimistic local feedback
+    const userLog: ConsoleLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      message: `> ${cmd}`,
+    };
+    setLogs((prev) => [...prev, userLog]);
+
     try {
-      await api.sendConsoleCommand(cmd);
-    } catch {}
-    setExecuting(false);
+      const res = await api.sendConsoleCommand(cmd);
+      if (res && res.output) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            timestamp: new Date().toISOString(),
+            level: 'INFO',
+            message: res.output,
+          },
+        ]);
+      }
+    } catch (err: any) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          level: 'ERROR',
+          message: err.message || 'Command delivery failed.',
+        },
+      ]);
+    } finally {
+      setExecuting(false);
+    }
   };
 
   const handleCopyLogs = () => {
