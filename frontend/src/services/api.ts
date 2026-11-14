@@ -56,7 +56,7 @@ export const api = {
 
   // Server
   getServerStatus: () => request<any>('/server/status'),
-  startServer: () => request<any>('/server/start', { method: 'POST' }),
+  startServer: (force = false) => request<any>('/server/start', { method: 'POST', body: JSON.stringify({ force }) }),
   stopServer: () => request<any>('/server/stop', { method: 'POST' }),
   restartServer: () => request<any>('/server/restart', { method: 'POST' }),
 

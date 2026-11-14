@@ -12,7 +12,8 @@ router.get('/status', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.post('/start', async (req: AuthenticatedRequest, res: Response) => {
-  const result = await ServerService.start();
+  const force = Boolean(req.body?.force);
+  const result = await ServerService.start(force);
   res.json(result);
 });
 
@@ -27,4 +28,3 @@ router.post('/restart', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 export default router;
-

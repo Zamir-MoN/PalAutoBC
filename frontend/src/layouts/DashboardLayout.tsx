@@ -63,7 +63,7 @@ export function DashboardLayout() {
   const handleStart = async () => {
     setActionLoading(true);
     try {
-      await api.startServer();
+      await api.startServer(true);
       const status = await api.getServerStatus();
       setServerStatus(status);
     } finally {

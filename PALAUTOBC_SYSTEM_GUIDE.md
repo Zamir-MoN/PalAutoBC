@@ -186,3 +186,4 @@ sudo systemctl restart palautobc.service
 ---
 
 *Documentation compiled and maintained for PalAutoBC — Production Palworld Management Panel.*
+
