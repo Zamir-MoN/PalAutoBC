@@ -332,7 +332,17 @@ export class BackupService {
       const remote = `${config.rcloneRemote}:${config.rcloneBackupFolder}`;
       const { stdout } = await execAsync(`rclone lsjson "${remote}"`);
       const items = JSON.parse(stdout.trim() || '[]');
-      return items.filter((item: any) => item.Name.endsWith('.zip'));
+      const zipItems = items.filter((item: any) => item.Name && item.Name.endsWith('.zip'));
+
+      // Sort newest archives first (by ModTime and filename timestamp)
+      zipItems.sort((a: any, b: any) => {
+        const timeA = new Date(a.ModTime || 0).getTime();
+        const timeB = new Date(b.ModTime || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        return b.Name.localeCompare(a.Name);
+      });
+
+      return zipItems;
     } catch (err: any) {
       Logger.warn(`[BackupService] Failed to list rclone backups: ${err.message}`);
       return [];

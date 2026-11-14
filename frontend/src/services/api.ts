@@ -71,6 +71,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  getDownloadBackupUrl: (filename: string) => {
+    const token = localStorage.getItem('palautobc_token') || '';
+    return `/api/v1/backup/download/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
+  },
 
   // Restore
   getRestoreHistory: () => request<any[]>('/restore/history'),

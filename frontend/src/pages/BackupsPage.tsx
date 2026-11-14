@@ -11,6 +11,7 @@ import {
   HardDrive,
   ExternalLink,
   ShieldAlert,
+  Download,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { BackupHistoryItem, RemoteBackup, BackupSchedule } from '../types';
@@ -40,7 +41,13 @@ export function BackupsPage() {
         api.getScheduler(),
       ]);
       setHistory(Array.isArray(hist) ? hist : []);
-      setRemoteBackups(Array.isArray(rem) ? rem : []);
+      const sortedRemote = (Array.isArray(rem) ? rem : []).sort((a: any, b: any) => {
+        const timeA = new Date(a.ModTime || 0).getTime();
+        const timeB = new Date(b.ModTime || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        return b.Name.localeCompare(a.Name);
+      });
+      setRemoteBackups(sortedRemote);
       if (sched) {
         setSchedule(sched);
         setScheduleTime(sched.backup_time || '03:00');
@@ -281,12 +288,23 @@ export function BackupsPage() {
                     <td className="py-3 text-secondaryText">{formatBytes(b.Size)}</td>
                     <td className="py-3 text-mutedText">{new Date(b.ModTime).toLocaleString()}</td>
                     <td className="py-3 pr-2 text-right font-sans">
-                      <a
-                        href="/restore"
-                        className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium"
-                      >
-                        Restore Options
-                      </a>
+                      <div className="inline-flex items-center gap-3">
+                        <a
+                          href={api.getDownloadBackupUrl(b.Name)}
+                          download={b.Name}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary hover:bg-border text-white text-xs font-medium transition-colors border border-border hover:border-accent"
+                          title="Download directly to your computer"
+                        >
+                          <Download className="w-3.5 h-3.5 text-accent" />
+                          <span>Download</span>
+                        </a>
+                        <a
+                          href="/restore"
+                          className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium"
+                        >
+                          Restore Options
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))

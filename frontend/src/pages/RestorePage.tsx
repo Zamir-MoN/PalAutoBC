@@ -29,7 +29,12 @@ export function RestorePage() {
   useEffect(() => {
     animatePageEntrance(containerRef.current);
     api.getRemoteBackups().then((res) => {
-      const list = Array.isArray(res) ? res : [];
+      const list = (Array.isArray(res) ? res : []).sort((a: any, b: any) => {
+        const timeA = new Date(a.ModTime || 0).getTime();
+        const timeB = new Date(b.ModTime || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        return b.Name.localeCompare(a.Name);
+      });
       setRemoteBackups(list);
       if (list.length > 0) {
         setSelectedBackup(list[0].Name);
