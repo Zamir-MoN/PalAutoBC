@@ -190,22 +190,22 @@ export function ConsolePage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex gap-2 flex-shrink-0">
+      <div className="flex gap-2.5 flex-shrink-0">
         <div className="relative flex-1">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search console logs..."
-            className="w-full bg-card border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-mutedText focus:outline-none focus:border-accent"
+            className="w-full bg-[#101218] border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-mutedText focus:outline-none transition-colors"
           />
-          <Search className="w-3.5 h-3.5 text-mutedText absolute left-2.5 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-mutedText absolute left-3 top-2.5" />
         </div>
 
         <select
           value={filterLevel}
           onChange={(e) => setFilterLevel(e.target.value)}
-          className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-accent font-mono"
+          className="bg-[#101218] border border-white/[0.08] focus:border-accent rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none font-mono"
         >
           <option value="ALL">All Levels</option>
           <option value="INFO">INFO Only</option>
@@ -217,29 +217,29 @@ export function ConsolePage() {
       {/* Log Terminal Window */}
       <div
         ref={logContainerRef}
-        className="flex-1 bg-secondary border border-border rounded-xl p-4 font-mono text-xs overflow-y-auto space-y-1 shadow-inner select-text"
+        className="flex-1 bg-[#090A0E]/95 border border-white/[0.08] rounded-2xl p-4 font-mono text-xs overflow-y-auto space-y-1.5 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)] select-text"
       >
         {filteredLogs.length === 0 ? (
-          <div className="text-mutedText italic text-center py-10">No log entries matching criteria.</div>
+          <div className="text-mutedText italic text-center py-12">No log entries matching criteria.</div>
         ) : (
           filteredLogs.map((log) => {
-            let color = 'text-secondaryText';
-            if (log.level === 'ERROR') color = 'text-danger font-semibold';
-            if (log.level === 'WARN') color = 'text-warning';
+            let color = 'text-zinc-300';
+            if (log.level === 'ERROR') color = 'text-red-400 font-semibold';
+            if (log.level === 'WARN') color = 'text-amber-300';
             if (log.level === 'DEBUG') color = 'text-mutedText';
 
             return (
-              <div key={log.id} className="leading-relaxed hover:bg-card/40 px-1 rounded flex gap-2">
-                <span className="text-mutedText/70 select-none flex-shrink-0">
+              <div key={log.id} className="leading-relaxed hover:bg-white/[0.04] px-2 py-0.5 rounded-md flex gap-2.5 transition-colors">
+                <span className="text-mutedText/60 select-none flex-shrink-0">
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </span>
                 <span
-                  className={`px-1 py-0.2 rounded text-[10px] font-bold flex-shrink-0 select-none ${
+                  className={`px-1.5 py-0.2 rounded text-[10px] font-bold flex-shrink-0 select-none border ${
                     log.level === 'ERROR'
-                      ? 'bg-danger/20 text-danger'
+                      ? 'bg-danger/20 text-danger border-danger/30'
                       : log.level === 'WARN'
-                      ? 'bg-warning/20 text-warning'
-                      : 'bg-card text-mutedText'
+                      ? 'bg-warning/20 text-warning border-warning/30'
+                      : 'bg-white/[0.04] text-mutedText border-white/[0.06]'
                   }`}
                 >
                   {log.level}
@@ -252,21 +252,21 @@ export function ConsolePage() {
       </div>
 
       {/* Interactive Command Terminal Input */}
-      <form onSubmit={handleSendCommand} className="flex gap-2 flex-shrink-0">
+      <form onSubmit={handleSendCommand} className="flex gap-2.5 flex-shrink-0">
         <div className="relative flex-1">
           <input
             type="text"
             value={commandInput}
             onChange={(e) => setCommandInput(e.target.value)}
             placeholder="Type administrative command (e.g. Save, ShowPlayers, Broadcast <msg>, KickPlayer <id>)..."
-            className="w-full bg-card border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-mutedText focus:outline-none focus:border-accent font-mono"
+            className="w-full bg-[#101218] border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-mutedText focus:outline-none font-mono transition-colors"
           />
-          <Terminal className="w-3.5 h-3.5 text-accent absolute left-2.5 top-3" />
+          <Terminal className="w-3.5 h-3.5 text-accent absolute left-3 top-3.5" />
         </div>
         <button
           type="submit"
           disabled={executing || !commandInput.trim()}
-          className="px-4 py-2 bg-accent text-black font-semibold text-xs rounded-lg hover:bg-accent-hover transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          className="px-5 py-2.5 bg-accent text-black font-bold text-xs rounded-xl hover:bg-accent-hover transition-all flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_-3px_rgba(163,230,53,0.35)]"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Execute</span>

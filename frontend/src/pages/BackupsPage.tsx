@@ -193,8 +193,8 @@ export function BackupsPage() {
       )}
 
       {/* Scheduler Configuration Card */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+      <div className="glass-panel rounded-2xl p-6 shadow-sm">
+        <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
           <Calendar className="w-4 h-4 text-accent" />
           Automated Daily Backup Schedule
         </h2>
@@ -206,7 +206,7 @@ export function BackupsPage() {
               type="time"
               value={scheduleTime}
               onChange={(e) => setScheduleTime(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent font-mono"
+              className="w-full bg-black/40 border border-white/[0.08] focus:border-accent rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none font-mono"
             />
           </div>
 
@@ -215,7 +215,7 @@ export function BackupsPage() {
             <select
               value={scheduleTimezone}
               onChange={(e) => setScheduleTimezone(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent font-mono"
+              className="w-full bg-black/40 border border-white/[0.08] focus:border-accent rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none font-mono"
             >
               <option value="UTC">UTC (Coordinated Universal Time)</option>
               <option value="America/New_York">America/New_York (EST/EDT)</option>
@@ -225,15 +225,15 @@ export function BackupsPage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-2 h-10">
+          <div className="flex items-center gap-2.5 h-10">
             <input
               type="checkbox"
               id="sched-enabled"
               checked={scheduleEnabled}
               onChange={(e) => setScheduleEnabled(e.target.checked)}
-              className="w-4 h-4 rounded bg-secondary border-border text-accent focus:ring-accent"
+              className="w-4 h-4 rounded-md bg-black/40 border-white/[0.15] text-accent focus:ring-accent"
             />
-            <label htmlFor="sched-enabled" className="text-xs font-medium text-white cursor-pointer">
+            <label htmlFor="sched-enabled" className="text-xs font-medium text-white cursor-pointer select-none">
               Enable Daily Automated Backup
             </label>
           </div>
@@ -241,7 +241,7 @@ export function BackupsPage() {
           <div>
             <button
               type="submit"
-              className="w-full bg-card hover:bg-border text-white border border-border text-xs font-medium py-2 rounded-lg transition-colors"
+              className="w-full bg-white/[0.05] hover:bg-white/[0.1] text-white border border-white/[0.08] hover:border-accent/40 text-xs font-semibold py-2.5 rounded-xl transition-all shadow-sm"
             >
               Update Schedule
             </button>
@@ -250,13 +250,13 @@ export function BackupsPage() {
       </div>
 
       {/* Google Drive Archives Table */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+      <div className="glass-panel rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <CloudUpload className="w-4 h-4 text-accent" />
             Google Drive Backup Archives (Retention: Unlimited)
           </h2>
-          <span className="text-xs font-mono text-mutedText">
+          <span className="text-xs font-mono text-mutedText bg-white/[0.04] px-2.5 py-1 rounded-lg border border-white/[0.06]">
             Total Archives: {remoteBackups.length}
           </span>
         </div>
@@ -264,43 +264,45 @@ export function BackupsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-border/80 text-mutedText font-medium">
-                <th className="pb-3 pl-2">Archive Name</th>
+              <tr className="border-b border-white/[0.06] text-mutedText font-medium">
+                <th className="pb-3 pl-3">Archive Name</th>
                 <th className="pb-3">Size</th>
                 <th className="pb-3">Timestamp</th>
-                <th className="pb-3 pr-2 text-right">Action</th>
+                <th className="pb-3 pr-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/40 font-mono">
+            <tbody className="divide-y divide-white/[0.04] font-mono">
               {remoteBackups.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-mutedText font-sans">
+                  <td colSpan={4} className="py-10 text-center text-mutedText font-sans">
                     No remote backups found in Google Drive folder.
                   </td>
                 </tr>
               ) : (
                 remoteBackups.map((b) => (
-                  <tr key={b.Name} className="hover:bg-secondary/40 transition-colors">
-                    <td className="py-3 pl-2 font-semibold text-white flex items-center gap-2">
-                      <Database className="w-3.5 h-3.5 text-accent" />
-                      <span>{b.Name}</span>
+                  <tr key={b.Name} className="hover:bg-white/[0.03] transition-colors group">
+                    <td className="py-3.5 pl-3 font-semibold text-white flex items-center gap-2.5">
+                      <div className="p-1 rounded-md bg-accent/10 border border-accent/20 text-accent">
+                        <Database className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="group-hover:text-accent transition-colors">{b.Name}</span>
                     </td>
-                    <td className="py-3 text-secondaryText">{formatBytes(b.Size)}</td>
-                    <td className="py-3 text-mutedText">{new Date(b.ModTime).toLocaleString()}</td>
-                    <td className="py-3 pr-2 text-right font-sans">
-                      <div className="inline-flex items-center gap-3">
+                    <td className="py-3.5 text-secondaryText">{formatBytes(b.Size)}</td>
+                    <td className="py-3.5 text-mutedText">{new Date(b.ModTime).toLocaleString()}</td>
+                    <td className="py-3.5 pr-3 text-right font-sans">
+                      <div className="inline-flex items-center gap-2.5">
                         <a
                           href={api.getDownloadBackupUrl(b.Name)}
                           download={b.Name}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary hover:bg-border text-white text-xs font-medium transition-colors border border-border hover:border-accent"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-accent hover:text-black text-white text-xs font-semibold transition-all border border-white/[0.08] shadow-sm"
                           title="Download directly to your computer"
                         >
-                          <Download className="w-3.5 h-3.5 text-accent" />
+                          <Download className="w-3.5 h-3.5" />
                           <span>Download</span>
                         </a>
                         <a
                           href="/restore"
-                          className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium"
+                          className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-semibold"
                         >
                           Restore Options
                         </a>

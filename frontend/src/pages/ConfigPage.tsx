@@ -173,7 +173,7 @@ export function ConfigPage() {
 
       {activeTab === 'raw' ? (
         /* Raw INI Text Editor */
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3">
+        <div className="glass-panel rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
               <Sliders className="w-4 h-4 text-accent" />
@@ -196,7 +196,7 @@ export function ConfigPage() {
         /* Visual Form Sections */
         <div className="space-y-6">
           {/* 1. General & Security */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="glass-panel rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Shield className="w-4 h-4 text-accent" />
@@ -310,7 +310,7 @@ export function ConfigPage() {
           </div>
 
           {/* 2. Survival, Stamina & Item Rates */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="glass-panel rounded-2xl p-6 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
               <Zap className="w-4 h-4 text-accent" />
               Survival, Stamina & Weight Rates
@@ -425,7 +425,7 @@ export function ConfigPage() {
           </div>
 
           {/* 3. Multipliers & Spawns */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="glass-panel rounded-2xl p-6 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
               <Zap className="w-4 h-4 text-accent" />
               Gameplay & Multipliers
@@ -500,7 +500,7 @@ export function ConfigPage() {
           </div>
 
           {/* 4. Bases, Guilds & PvP */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="glass-panel rounded-2xl p-6 shadow-sm space-y-4">
             <h2 className="text-sm font-semibold text-white border-b border-border/60 pb-3 flex items-center gap-2">
               <Shield className="w-4 h-4 text-accent" />
               Bases, Guilds & PvP Combat
@@ -593,7 +593,7 @@ export function ConfigPage() {
       )}
 
       {/* Snapshot Version History */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+      <div className="glass-panel rounded-2xl p-6 shadow-sm">
         <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
           <History className="w-4 h-4 text-accent" />
           Configuration Version Snapshots

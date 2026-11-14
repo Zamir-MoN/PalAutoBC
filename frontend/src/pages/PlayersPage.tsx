@@ -182,22 +182,22 @@ export function PlayersPage() {
       )}
 
       {/* Broadcast Banner Card */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+      <div className="glass-panel rounded-2xl p-6 shadow-sm">
+        <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-accent" />
           Server Broadcast Announcement
         </h2>
-        <form onSubmit={handleBroadcast} className="flex gap-2">
+        <form onSubmit={handleBroadcast} className="flex gap-2.5">
           <input
             type="text"
             value={broadcastMsg}
             onChange={(e) => setBroadcastMsg(e.target.value)}
             placeholder="Type server announcement message..."
-            className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent"
+            className="flex-1 bg-black/40 border border-white/[0.08] focus:border-accent rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors"
           />
           <button
             type="submit"
-            className="px-4 py-2 bg-accent text-black font-semibold text-xs rounded-lg hover:bg-accent-hover transition-colors"
+            className="px-5 py-2.5 bg-accent text-black font-bold text-xs rounded-xl hover:bg-accent-hover transition-all shadow-[0_0_15px_-3px_rgba(163,230,53,0.35)]"
           >
             Send Broadcast
           </button>
@@ -205,14 +205,14 @@ export function PlayersPage() {
       </div>
 
       {/* Online Players Table */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+      <div className="glass-panel rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
             Online Players ({players.length})
           </h2>
-          <span className="text-xs font-mono text-mutedText">
-            {rconEnabled ? 'RCON Active' : 'Socket Inspection Mode'}
+          <span className="text-xs font-mono text-mutedText bg-white/[0.04] px-2.5 py-1 rounded-lg border border-white/[0.06]">
+            {rconEnabled ? 'RCON Engine Active' : 'Socket Inspection Mode'}
           </span>
         </div>
 
@@ -266,7 +266,7 @@ export function PlayersPage() {
 
       {/* Registered Saved Players */}
       {savedPlayers.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="glass-panel rounded-2xl p-6 shadow-sm">
           <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-accent" />
             Registered Saved Player Characters ({savedPlayers.length})
