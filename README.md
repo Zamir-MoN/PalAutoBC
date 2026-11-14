@@ -1,87 +1,71 @@
 # PalAutoBC — Palworld Dedicated Server Management Panel
 
-A modern, production-grade, self-hosted web dashboard and automated backup engine for Palworld dedicated servers on Ubuntu Linux.
+A high-performance, self-hosted web management dashboard and automated disaster recovery engine for Palworld dedicated servers on Ubuntu Linux.
+
+![Dashboard Preview](https://img.shields.io/badge/PalAutoBC-v1.0.0-A3E635?style=for-the-badge&logo=server)
+![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?style=flat&logo=node.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)
+![Tailwind](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat&logo=tailwind-css)
+![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=flat&logo=sqlite)
 
 ---
 
-## Architecture Overview
+## Key Features
+
+- **⚡ Instant Backups (< 3 seconds)**: Fast native compression of `Pal/Saved` (~100MB instead of 6GB) with zero-downtime RCON world flush.
+- **☁️ Google Drive Cloud Storage**: Direct `rclone` integration with unlimited retention, automatic verification, and newest-first chronological sorting.
+- **⬇️ Direct Local Downloads**: One-click download button in the dashboard to save backup `.zip` archives directly to your personal computer.
+- **🎯 100% Accurate Player Counter**: Source RCON `ShowPlayers` queries coupled with UDP port 8211 socket inspection—zero false positives.
+- **🖥️ Live Console & Command Terminal**: Real-time log streaming from `PalServer.log` and GNU Screen buffer with dual-delivery execution.
+- **🛠️ Safe Configuration Editor**: Visual form and direct Raw INI editor with automatic rollback snapshots stored in SQLite.
+- **💎 Luxury Glassmorphism UI**: High-end obsidian dark theme (`#08090C`) with ambient lime/emerald lighting and responsive telemetry meters.
+
+---
+
+## System Architecture
 
 - **Web Server & Backend API**: Node.js + Express + TypeScript on **Port 3000**
-  - **No external reverse proxies (No Nginx / Apache / Caddy)**
-  - Express serves the React SPA, REST endpoints (`/api/v1/*`), and WebSockets (`/ws`) from the same HTTP server
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + GSAP + TanStack Query + Lucide Icons
-  - Dark-mode minimalist UI inspired by Linear, Vercel, and Raycast
-  - Responsive layout with iOS safe-area inset support
-- **Dedicated Game Server**: Palworld on **Port 8211** (located at `/home/ubuntu/Palserver`)
-- **Metadata Database**: SQLite in WAL mode (`palautobc.sqlite`)
-- **Cloud Backup**: `rclone` integration with Google Drive (format: `palbc_YYYY-MM-DD_HH-MM-SS.zip`)
-- **Process Supervisor**: GNU Screen & systemd support with crash detection and guaranteed restart error handling
+  - **No external reverse proxies (No Nginx / Apache / Caddy required)**
+  - Express serves the React SPA, REST endpoints (`/api/v1/*`), and WebSockets (`/ws`) from the single unified HTTP instance.
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + Lucide Icons + GSAP.
+- **Dedicated Game Server**: Palworld on **Port 8211** (located at `/home/paladmin/palworld`).
+- **Metadata Database**: SQLite in WAL mode (`palautobc.sqlite`).
+- **Cloud Backup**: `rclone` integration with Google Drive (format: `palbc_YYYY-MM-DD_HH-MM-SS.zip`).
 
 ---
 
 ## Production Deployment on VPS
 
-### 1. Transfer Project to VPS
-From your local machine or repository, clone/upload this `PalAutoBC` folder to:
 ```bash
-/home/ubuntu/PalAutoBC
+# 1. Clone repository to VPS
+cd ~
+git clone https://github.com/Zamir-MoN/PalAutoBC.git
+cd PalAutoBC
+
+# 2. Deploy dashboard service
+chmod +x scripts/*.sh
+bash ./scripts/deploy.sh
 ```
 
-### 2. Execute One-Step Deployment
-```bash
-cd /home/ubuntu/PalAutoBC/scripts
-chmod +x deploy.sh backup.sh restore.sh server-start.sh server-stop.sh
-./deploy.sh
-```
+### Accessing the Dashboard
 
-The script will automatically:
-1. Build the production React frontend bundle into `backend/public`
-2. Build the TypeScript backend into `backend/dist`
-3. Install and enable the systemd service `/etc/systemd/system/palautobc.service`
-4. Start the unified web server on port `3000`
-
----
-
-## Accessing the Dashboard
-
-Open your browser and navigate to:
+Navigate to:
 ```
 http://YOUR_VPS_IP:3000
 ```
 
-### Default Admin Credentials
-- **Username**: `admin`
-- **Password**: `PalAutoAdmin2026!`
-
-*(You can change the password at any time via the API or settings.)*
+- **Default Username**: `admin`
+- **Default Password**: `PalAutoAdmin2026!`
 
 ---
 
-## Features & Verification
+## Full Documentation
 
-| Module | Capability | Implementation |
-| :--- | :--- | :--- |
-| **Server Controls** | Start, stop, restart | Prevents duplicate instances, verifies PID and port 8211 listener |
-| **Automated Backups** | Daily 03:00 UTC | Graceful stop $\rightarrow$ ZIP $\rightarrow$ SHA256 $\rightarrow$ rclone upload $\rightarrow$ remote verification $\rightarrow$ guaranteed restart in finally |
-| **Disaster Recovery** | Zero-risk restore | Pre-restore safety snapshot, staged extraction, `Level.sav` validation, permission enforcement |
-| **Config Editor** | `PalWorldSettings.ini` | Visual form, pre-save snapshot history, rollback support |
-| **Player Moderation** | Online roster | RCON integration for Kick, Ban, Server Broadcasts, and instant Save |
-| **Live Console** | PalServer.log stream | Real-time WebSocket streaming, auto-scroll, log filtering, command execution |
-| **File Manager** | Sandboxed explorer | Restricts access to `/home/ubuntu/Palserver`, file editor, rename, delete |
-| **VPS Telemetry** | System stats | Real-time CPU, RAM, Disk, Network, and Palworld process resource gauges |
+For the complete technical architecture, INI settings reference, multiplier breakdown, and maintenance guide, see:
+👉 [**PALAUTOBC_SYSTEM_GUIDE.md**](./PALAUTOBC_SYSTEM_GUIDE.md)
 
 ---
 
-## Service Management Commands
+## License
 
-```bash
-# Check service status
-sudo systemctl status palautobc
-
-# View live dashboard logs
-sudo journalctl -u palautobc -f
-
-# Restart dashboard service
-sudo systemctl restart palautobc
-```
-
+Private / MIT License. Developed for PalAutoBC dedicated servers.
